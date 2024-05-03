@@ -55,46 +55,65 @@ Client::Client()
 }
 
 
-int Client::snd(Message *msg)
+Client::~Client()
+{
+    WSACleanup();
+    closesocket(clientSocket);
+    printf("\n\n\n Cleaned up successfully!");
+
+}
+
+
+int Client::snd(main_msg msg)
 {
     int iSendResult;
-    char *strMsg;
-    strMsg = encode(msg);
-    //encrypt(strMsg, sizeof(main_msg));
+    string result = encode(msg);
+    size_t mSize = strlen(result.c_str()); // Message size
 
-    iSendResult = send(clientSocket, strMsg, strlen(strMsg) + 1, 0);
+    printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
+        msg.header.auth, msg.data.c_str());
+    //encrypt(strMsg);
 
+    iSendResult = send(clientSocket, result.c_str(), mSize, 0);
     return iSendResult;
 }
 
 
-int Client::receive(Message *msg)
+int Client::receive(main_msg &msg)
 {
-    char *buffer = new char[sizeof(MessageHeader)];
-    MessageHeader *header;
-    int iResult = recv(clientSocket, buffer, sizeof(MessageHeader), 0);
+    memset(&msg, 0, sizeof(main_msg));
+    char *buffer = new char[HEADER_STRING_SIZE + 1];
+    memset(buffer, 0, HEADER_STRING_SIZE + 1);
+    int iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
+    buffer[HEADER_STRING_SIZE] = '\0';
     if (iResult < 0)
         return iResult;
 
-    decrypt(buffer);
+    //decrypt(buffer);
 
-    header = new MessageHeader();
-    memcpy(header, buffer, sizeof(MessageHeader));
+    MessageHeader header = decodeHeader(buffer);
 
-    msg = new Message(header);
-    buffer = new char[msg->msg.header.size];
+    buffer = new char[header.size + 1];
 
-    iResult = recv(clientSocket, buffer, msg->msg.header.size, 0);
-    decrypt(buffer);
-    msg = decode(buffer);
+    memset(buffer, 0, header.size + 1);
+    iResult = recv(clientSocket, buffer, header.size, 0);
+    buffer[header.size] = '\0';
+    //decrypt(buffer);
+    cerr << (string)buffer;
+    msg.data = (string)buffer;
+    msg.header = header;
+
+    cerr << "\nmsg.data: " << msg.data << "\n";
+
+    delete[] buffer;
     return iResult;
 }
 
 
 
-void Client::encrypt(char *buffer, int len)
+void Client::encrypt(char *buffer)
 {
-    for (int i = 0; i < len; i++)
+    for (int i = 0; i < strlen(buffer); i++)
     {
         buffer[i] = ~buffer[i] ^ 1;
     }
@@ -110,18 +129,42 @@ void Client::decrypt(char *buffer)
 }
 
 
-char *Client::encode(Message *msg)
+string Client::encode(main_msg msg)
 {
-    char *ret = new char[sizeof(main_msg)];
-    memset(ret, 0, sizeof(main_msg));
-    //memcpy(ret, &msg->msg, sizeof(main_msg));
-    memcpy(ret, &(msg->msg), sizeof(main_msg));
-    return ret;
+    size_t len = log10(msg.header.size) + 1;
+    string strNum = to_string(msg.header.size);
+    strNum.insert(0, SIZE_LENGTH - len, '0');
+    string str = strNum + to_string((int)msg.header.type)
+        + (string)(msg.header.auth) + msg.data;
+
+    return str;
 }
 
-Message *Client::decode(char *str)
+MessageHeader Client::decodeHeader(char *str)
 {
-    Message *msg = new Message();
+    printf("\nServer::decodeHeader- %s\n", str);
+    MessageHeader result;
+    memset(&result, 0, sizeof(result));
+
+    string input = str;
+
+    int inputSize = stoi(input.substr(0, SIZE_LENGTH));
+    Operation inputType = (Operation)stoi(input.substr(SIZE_LENGTH, SIZE_LENGTH + 1));
+    string auth = input.substr(SIZE_LENGTH + 1, SIZE_LENGTH + 9);
+
+    result.size = inputSize;
+    strncpy_s(result.auth, 9, auth.c_str(), strlen(auth.c_str()));
+    result.auth[8] = '\0';
+    result.type = inputType;
+
+    return result;
+}
+
+
+
+/*main_msg Client::decode(char *str)
+{
+    main_msgmsg = new Message();
     memcpy(msg, str, sizeof(str));
     return msg;
-}
+}*/

@@ -17,7 +17,8 @@ class UI
 	User currentUser;
 	string authentication;
 public:
-	
+	UI();
+	~UI();
 	void run();
 
 };

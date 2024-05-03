@@ -16,6 +16,8 @@
 
 int main()
 {
+	printf("Size of main_msg struct: %zu\n", sizeof(main_msg));
+
 	UI ui;
 	ui.run();
 

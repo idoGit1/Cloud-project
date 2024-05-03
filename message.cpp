@@ -1,6 +1,6 @@
 #include "message.h"
 
-
+/*
 Message::Message()
 {
 
@@ -78,3 +78,4 @@ MessageHeader *Message::getHeader()
 
 	return cpy;
 }
+*/

@@ -23,14 +23,15 @@ class Client
 	SOCKET clientSocket;
 public:
 	Client();
-
-	void encrypt(char *, int);
+	~Client();
+	void encrypt(char *);
 	void decrypt(char *);
 
-	char *encode(Message *);
-	Message *decode(char *);
+	string encode(main_msg);
+	MessageHeader decodeHeader(char *);
+	//main_msg decode(char *);
 
-	int snd(Message *);
-	int receive(Message *);
+	int snd(main_msg);
+	int receive(main_msg &);
 };
 

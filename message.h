@@ -3,17 +3,18 @@
 #ifndef COMMON_H_
 #include "common.h"
 #endif
-#define SUCCESS "1"
-#define FAILURE "0"
+#define SUCCESS (string)"1"
+#define FAILURE (string)"0"
 #define BLANKAUTH "--------"
 
+#include <string>
 using namespace std;
 
 struct MessageHeader
 {
-	uint64_t size; // Size of the data
+	size_t size; // Size of the data
 	Operation type;
-	string auth; // Authehntication token.
+	char auth[9]; // Authehntication token.
 };
 
 struct main_msg
@@ -21,6 +22,7 @@ struct main_msg
 	MessageHeader header;
 	string data;
 };
+/*
 class Message
 {
 	main_msg msg;
@@ -42,5 +44,8 @@ public:
 	uint64_t getSize();
 	MessageHeader *getHeader();
 
+
+
 	friend class Client;
 };
+*/
