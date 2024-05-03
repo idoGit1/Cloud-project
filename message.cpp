@@ -1,6 +1,10 @@
 #include "message.h"
 
 
+
+
+
+/*
 Message::Message()
 {
 	msg.header.auth.reserve(8);
@@ -77,3 +81,4 @@ MessageHeader *Message::getHeader()
 
 	return cpy;
 }
+*/

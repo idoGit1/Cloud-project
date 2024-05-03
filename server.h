@@ -30,7 +30,7 @@ private:
 public:
 	Server();
 
-	//~Server();
+	~Server();
 
 	void build();
 
@@ -40,11 +40,14 @@ public:
 	void encrypt(char *);
 	void decrypt(char *);
 
-	char *encode(Message *);
-	Message *decode(char *);
+	//char *encode(Message *);
+	//Message *decode(char *);
+	string encode(main_msg);
+	MessageHeader decodeHeader(char *);
+	//main_msg decode(char *);
 
-	int snd(SOCKET, Message *);
-	int receive(SOCKET, Message *);
+	int snd(SOCKET, main_msg);
+	int receive(SOCKET, main_msg &);
 	void run();
 
 };

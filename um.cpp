@@ -1,8 +1,7 @@
 #include "um.h"
 
-User user;
-
-int UM::callback(void *data, int argc, char **argv, char **azColName)
+static string SQLPassword;
+int callback(void *data, int argc, char **argv, char **azColName)
 {
 	int i;
 	//fprintf(stderr, "%s: ", (const char *)data);
@@ -10,10 +9,8 @@ int UM::callback(void *data, int argc, char **argv, char **azColName)
 	for (i = 0; i < argc; i++) {
 		printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
 		printf("Col name: %s\n", azColName[i]);
-		if (strncmp(azColName[i], "password", 9) == 0)
-		{
-			user.password = argv[i];
-		}
+		printf("got into callback()\n");
+		SQLPassword = (string)argv[i];
 	}
 
 	printf("\n");
@@ -59,38 +56,43 @@ UM::UM()
 }
 
 
-Message* UM::success(Operation type)
+main_msg UM::success(Operation type)
 {
-	Message* success = new Message();
-	success->setType(type);
-	success->setAuth(BLANKAUTH);
-	success->setData(SUCCESS);
-
+	main_msg success;
+	memset(&success, 0, sizeof(main_msg));
+	success.header.type = type;
+	strncpy_s(success.header.auth, 9, BLANKAUTH, 8);
+	success.header.auth[8] = '\0';
+	success.data = (string)SUCCESS;
+	success.header.size = 1;
 	return success;
 }
-Message* UM::failure(Operation type)
+main_msg UM::failure(Operation type)
 {
-	Message* failure = new Message();
-	failure->setType(type);
-	failure->setAuth(BLANKAUTH);
-	failure->setData(FAILURE);
+	main_msg failure;
+	memset(&failure, 0, sizeof(main_msg));
+	failure.header.type = type;
+	strncpy_s(failure.header.auth, 9, BLANKAUTH, 8);
+	failure.header.auth[8] = '\0';
+	failure.data = (string)FAILURE;
+	failure.header.size = 1;
 
 	return failure;
 }
 
 
-Message* UM::execute(Message* msg)
+main_msg UM::execute(main_msg msg)
 {
 	//typedef enum { Logout, Signup, Login, Download, Upload, Share, Status} Operation;
-	if (msg->getAuth() != authentication)
+	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 	{
-		cerr << "Authenticatoin failed";
-		return failure(msg->getType());
+		cerr << "UM::execute- Authentication failed\n";
+		return failure(msg.header.type);
 	}
-	switch (msg->getType())
+	switch (msg.header.type)
 	{
-	case Logout:
-		return logout(msg);
+	case Quit:
+		return quit(msg);
 	case Signup:
 		return signup(msg);
 	case Login:
@@ -103,6 +105,8 @@ Message* UM::execute(Message* msg)
 		return share(msg);
 	case Status:
 		return status(msg);
+	case Exit:
+		exit_(msg);
 	default:
 		exit(1);
 	}
@@ -110,22 +114,27 @@ Message* UM::execute(Message* msg)
 }
 
 
-Message* UM::logout(Message* msg)
+void UM::exit_(main_msg msg)
 {
-	currentUser.username = "";
-	currentUser.password = "";
-
-	return success(msg->getType());
+	exit(0);
 }
 
-Message* UM::signup(Message* msg)
+
+main_msg UM::quit(main_msg msg)
 {
-	string strMsg = msg->getData(); // Format: [username password]
+	currentUser = User();
+	authentication = (string)BLANKAUTH;
 
-	int spaceIdx = strMsg.find(" ");
-	int endUsernameIdx = spaceIdx;
+	return success(msg.header.type);
+}
 
-	string username = strMsg.substr(0, endUsernameIdx);
+main_msg UM::signup(main_msg msg)
+{
+	string strMsg = msg.data; // Format: [username password]
+
+	size_t spaceIdx = strMsg.find(" ");
+
+	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
 	currentUser.username = username;
@@ -145,32 +154,42 @@ Message* UM::signup(Message* msg)
 		exit(1);
 	}
 	query = "INSERT INTO " + (string)TABLE + 
-		"VALUES('" + (string)currentUser.username + "', '" + (string)currentUser.password +
+		" VALUES('" + currentUser.username + "', '" + currentUser.password +
 		"');";
+	cerr << "Query: " << query;
 
 	exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
 
 	if (exitResult == SQLITE_OK)
 	{
-		return success(msg->getType());
+		return success(msg.header.type);
 	}
 	else
 	{
 		cerr << errMsg << "\n";
-		return failure(msg->getType());// Otherwise return Message that username is not unique and needs to be replaced.
+		return failure(msg.header.type);// Otherwise return Message that username is not unique and needs to be replaced.
 
 	}
 }
 
-Message* UM::login(Message* msg)
+
+main_msg UM::null()
+{
+	main_msg Null;
+	memset(&Null, 0, sizeof(main_msg));
+	return Null;
+}
+
+
+main_msg UM::login(main_msg msg)
 {
 	User user1;
-	string strMsg = msg->getData(); // Format: [username password]
+	string strMsg = msg.data; // Format: [username password]
 
-	int spaceIdx = strMsg.find(" ");
-	int endUsernameIdx = spaceIdx;
+	size_t spaceIdx = strMsg.find(" ");
+	//int endUsernameIdx = spaceIdx;
 
-	string username = strMsg.substr(0, endUsernameIdx);
+	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
 	user1.username = username;
@@ -192,54 +211,57 @@ Message* UM::login(Message* msg)
 		cerr << "problem inside login func.\n";
 		exit(1);
 	}
-	query = "SELECT * FROM " + (string)TABLE +
-		"WHERE username = '" + user.username + "';";
+	query = "SELECT password FROM " + (string)TABLE +
+		" WHERE username = '" + user1.username + "';";
 
 	exitResult = sqlite3_exec(db, query.c_str(), callback, 0, &errMsg);
 
 	if (exitResult != SQLITE_OK)
-		return failure(msg->getType());
+		return failure(msg.header.type);
 
-	if (user1.password == user.password)
+	if (user1.password == SQLPassword)
 	{
 		currentUser = User(user1);
 		authentication = generateAuthentication();
 
-		Message *respond = new Message();
-		
-		respond->setData(authentication);
-		respond->setType(Login);
-		respond->setAuth(authentication);
+		main_msg respond;
+		memset(&respond, 0, sizeof(main_msg));
+		//respond.data = authentication;
+		respond.data = (string)SUCCESS;
+		respond.header.type = Login;
+		strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
+		respond.header.auth[8] = '\0';
+		respond.header.size = (respond.data).size();
 		return respond;
 	}
 	return failure(Login); // Password incorrect
 	
 }
 
-Message* UM::download(Message* msg)
+main_msg UM::download(main_msg msg)
 {
 	// TO DO: 
 			// 2.1 if file cannot be located return failure
 			// 2.2 if file is located, send it.
-	return NULL;
+	return null();
 }
 
-Message* UM::upload(Message* msg)
+main_msg UM::upload(main_msg msg)
 {
 	
 		// YES: locate directory and create + upload file, return success
 		// NO: return failure
-	return NULL;
+	return null();
 }
 
-Message* UM::share(Message* msg)
+main_msg UM::share(main_msg msg)
 {
-	return NULL;
+	return null();
 }
 
-Message* UM::status(Message* msg)
+main_msg UM::status(main_msg msg)
 {
-	return NULL;
+	return null();
 	// TO DO:
 }
 

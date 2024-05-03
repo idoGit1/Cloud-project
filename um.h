@@ -25,32 +25,26 @@ private:
 	string authentication;
 
 
-	Message* logout(Message*);
-	Message* signup(Message*);
-	Message* login(Message*);
-	Message* download(Message*);
-	Message* upload(Message*);
-	Message* share(Message*);
-	Message* status(Message*);
-
+	main_msg quit(main_msg);
+	main_msg signup(main_msg);
+	main_msg login(main_msg);
+	main_msg download(main_msg);
+	main_msg upload(main_msg);
+	main_msg share(main_msg);
+	main_msg status(main_msg);
+	void exit_(main_msg);
 	static string generateAuthentication();
 
-	Message *success(Operation);
-	Message *failure(Operation);
-
+	main_msg success(Operation);
+	main_msg failure(Operation);
+	main_msg null();
 	// Handle sqlite
 
-	static int callback(void *, int, char **, char **);
+	//static int callback(void *, int, char **, char **);
 public:
 	static void createDatabase(); // Runs only ONCE.
 
 	UM();
-
-
-
-	Message* execute(Message*);
-
-
-
+	main_msg execute(main_msg);
 
 };

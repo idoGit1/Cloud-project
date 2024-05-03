@@ -7,7 +7,8 @@
 // All variables used for error handling end with E.
 
 
-int main()
+
+int main(int argc, char **argv)
 {
 	//UM::createDatabase(); // ONLY ONCE, WITH FIRST RUN.
 

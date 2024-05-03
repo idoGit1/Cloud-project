@@ -11,6 +11,8 @@
 #ifndef MACROS
 #define MACROS
 #define PORT 1111
+#define SIZE_LENGTH 9
+#define HEADER_STRING_SIZE 18
 #define IP "10.100.102.25"
 #define SIZE (int)1e9
 #define FAMILY AF_INET
@@ -19,4 +21,4 @@
 
 using namespace std;
 
-typedef enum { Logout, Signup, Login, Download, Upload, Share, Status, Null } Operation;
+typedef enum { Quit, Signup, Login, Download, Upload, Share, Status, Null, Exit } Operation;
