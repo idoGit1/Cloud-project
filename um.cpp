@@ -262,10 +262,35 @@ main_msg UM::login(main_msg msg)
 
 main_msg UM::download(main_msg msg)
 {
-	// TO DO: 
-			// 2.1 if file cannot be located return failure
-			// 2.2 if file is located, send it.
-	return null();
+
+	main_msg result;
+	memset(&result, 0, sizeof(main_msg));
+
+	string inputFilePath = (string)DATA_PATH + currentUser.username
+		+ "\\" + msg.data; // "D:\\Cloud project\\Cloud\\Data\\'username'\\filename"
+
+	ifstream file;
+	file.open(inputFilePath, ios::binary);
+	
+	if (!file.is_open())
+	{
+		return failure(msg.header.type);
+	}
+
+	string fileContent(istreambuf_iterator<char>(file), {});
+
+	file.close();
+
+	result.header.type = Download;
+	strncpy_s(result.header.auth, 9, authentication.c_str(), 8);
+	result.header.auth[8] = '\0';
+
+	result.data = msg.data + "*";
+	result.data += fileContent;
+
+	result.header.size = result.data.size();
+	
+	return result;
 }
 
 main_msg UM::upload(main_msg msg)

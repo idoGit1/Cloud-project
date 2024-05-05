@@ -46,7 +46,7 @@ public:
 	MessageHeader decodeHeader(char *);
 	//main_msg decode(char *);
 
-	int snd(SOCKET, main_msg);
+	int snd(SOCKET, main_msg &);
 	int receive(SOCKET, main_msg &);
 
 	//int receiveFile(SOCKET, main_msg &);

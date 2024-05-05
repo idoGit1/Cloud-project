@@ -174,7 +174,6 @@ void Server::run()
 int Server::receive(SOCKET clientSocket, main_msg &msg)
 {
     printf("Server::receive\n");
-    static int cnt = 1;
     int iResult = 0;
     memset(&msg, 0, sizeof(main_msg));
     char *buffer = new char[HEADER_STRING_SIZE + 1];
@@ -186,7 +185,6 @@ int Server::receive(SOCKET clientSocket, main_msg &msg)
 
     //decrypt(buffer);
     //printf("\n\n\n\nServer::receive %d", cnt);
-    cnt++;
     MessageHeader header;
     memset(&header, 0, sizeof(MessageHeader));
     header = decodeHeader(buffer);
@@ -233,6 +231,7 @@ int Server::receive(SOCKET clientSocket, main_msg &msg)
     //decrypt(buffer);
     //cerr << (string)buffer;
     //msg.data = (string)buffer;
+    memset(&msg.data, 0, sizeof(string));
     msg.data = string(buffer, header.size);
     //cerr << "msg.data.size() received: " << msg.data.size() << "\n";
     //cerr << "bytes received: " << iResult << ".\nsize of data: " << msg.data.size();
@@ -244,18 +243,21 @@ int Server::receive(SOCKET clientSocket, main_msg &msg)
 }
 
 
-int Server::snd(SOCKET clientSocket, main_msg msg)
+int Server::snd(SOCKET clientSocket, main_msg &msg)
 {
-    printf("Server::snd\n");
     int iSendResult;
     string result = encode(msg);
     //size_t mSize = strlen(result.c_str()); // Message size
 
-    //printf("\nServer::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
-       // msg.header.auth, msg.data.c_str());
+    //printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
+        //msg.header.auth, msg.data.c_str());
     //encrypt(strMsg);
-
+    if (result.size() != msg.header.size + 18)
+        printf("Server::snd\n");
     iSendResult = send(clientSocket, result.data(), result.size(), 0);
+    if (iSendResult != result.size())
+        printf("Server::snd2\n");
+    cerr << "Sent " << iSendResult << " bytes\n";
     return iSendResult;
 }
 
