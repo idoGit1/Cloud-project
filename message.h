@@ -17,6 +17,8 @@ struct MessageHeader
 	char auth[9]; // Authehntication token.
 };
 
+MessageHeader copyHeader(MessageHeader &);
+
 struct main_msg
 {
 	MessageHeader header;

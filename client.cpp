@@ -64,19 +64,42 @@ Client::~Client()
 }
 
 
-int Client::snd(main_msg msg)
+int Client::snd(main_msg &msg)
 {
     int iSendResult;
     string result = encode(msg);
-    size_t mSize = strlen(result.c_str()); // Message size
+    //size_t mSize = strlen(result.c_str()); // Message size
 
-    printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
-        msg.header.auth, msg.data.c_str());
+    //printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
+        //msg.header.auth, msg.data.c_str());
     //encrypt(strMsg);
-
-    iSendResult = send(clientSocket, result.c_str(), mSize, 0);
+    if (result.size() != msg.header.size + 18)
+        printf("Client::snd\n");
+    iSendResult = send(clientSocket, result.data(), result.size(), 0);
+    if (iSendResult != result.size())
+        printf("Client::snd2\n");
+    cerr << "Sent " << iSendResult << " bytes\n";
     return iSendResult;
 }
+
+
+/*int Client::sendFile(main_msg msg, vector<string> &dataChunks)
+{
+    snd(msg);
+    main_msg line;
+    for (int i = 0; i < dataChunks.size(); i++)
+    {
+        memset(&line, 0, sizeof(main_msg));
+
+        line.header.type = Upload;
+        strncpy_s(line.header.auth, 9, msg.header.auth, 8);
+        line.header.auth[8] = '\0';
+        line.data = (string)dataChunks[i];
+        line.header.size = line.data.size();
+        snd(line);
+    }
+}*/
+
 
 
 int Client::receive(main_msg &msg)
@@ -101,7 +124,7 @@ int Client::receive(main_msg &msg)
     //decrypt(buffer);
     cerr << (string)buffer;
     msg.data = (string)buffer;
-    msg.header = header;
+    msg.header = copyHeader(header);
 
     cerr << "\nmsg.data: " << msg.data << "\n";
 
@@ -129,14 +152,18 @@ void Client::decrypt(char *buffer)
 }
 
 
-string Client::encode(main_msg msg)
+string Client::encode(main_msg &msg)
 {
     size_t len = log10(msg.header.size) + 1;
     string strNum = to_string(msg.header.size);
+    printf("%lld", ((string)msg.header.auth).size());
     strNum.insert(0, SIZE_LENGTH - len, '0');
     string str = strNum + to_string((int)msg.header.type)
         + (string)(msg.header.auth) + msg.data;
 
+    printf("size str: %d size data: %d\n", str.size(), msg.data.size());
+    printf("%c\n", str[str.size() - 1]);
+    str.resize(msg.header.size + 18);
     return str;
 }
 

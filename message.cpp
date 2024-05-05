@@ -1,5 +1,16 @@
 #include "message.h"
 
+
+MessageHeader copyHeader(MessageHeader &obj)
+{
+	MessageHeader cpy;
+	cpy.size = obj.size;
+	cpy.type = obj.type;
+	strncpy_s(cpy.auth, 9, obj.auth, 8);
+	cpy.auth[8] = '\0';
+	return cpy;
+}
+
 /*
 Message::Message()
 {

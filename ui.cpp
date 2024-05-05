@@ -28,16 +28,16 @@ void UI::run()
 			printf("\n(%s)>>", currentUser.username.c_str());
 		else
 			printf("\n>>");
-		cin >> op;
+		getline(cin, op);
 		printf("\n");
-		int spaceIdx = op.find(" ");
-		if (op == "h")
+		size_t spaceIdx = op.find(" ");
+		if (op == "h" && spaceIdx == string::npos)
 		{
 			printf("(cloud) h - help\nlogin\nsignup\nquit"
-				"(to quit Account)\nstatus\ndownload 'filename.type'\nupload"
-				" (filename.type)\nshare @username@ 'filename.type'\n\n");
+				"(to quit Account)\nstatus\ndownload filename.type\nupload"
+				" filename.type\nshare @username@ filename.type\n\n");
 		}
-		else if (op == "login")
+		else if (op == "login" && spaceIdx == string::npos)
 		{
 			User user;
 			printf("(cloud) Username: ");
@@ -71,7 +71,7 @@ void UI::run()
 				printf("Problem occurred. Wrong username or password.");
 			}
 		}
-		else if (op == "signup")
+		else if (op == "signup" && spaceIdx == string::npos)
 		{
 			User user;
 			printf("(cloud) Enter username: ");
@@ -107,7 +107,7 @@ void UI::run()
 				printf("(cloud) Problem occurred! Username is not unique.");
 			}
 		}
-		else if (op == "quit")
+		else if (op == "quit" && spaceIdx == string::npos)
 		{
 			main_msg msg;
 			memset(&msg, 0, sizeof(main_msg));
@@ -136,7 +136,7 @@ void UI::run()
 			
 
 		}
-		else if (op == "exit")
+		else if (op == "exit" && spaceIdx == string::npos)
 		{
 			main_msg msg;
 			memset(&msg, 0, sizeof(main_msg));
@@ -146,12 +146,37 @@ void UI::run()
 			msg.data = (string)SUCCESS;
 			msg.header.size = 1;
 			client.snd(msg);
-
+			sleep_for(seconds(1));
 			exit(0);
 		}
-		else if (op == "status")
+		else if (op == "status" && spaceIdx == string::npos)
 		{
+			main_msg msg;
+			memset(&msg, 0, sizeof(main_msg));
 
+			msg.header.type = Status;
+			strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
+			msg.header.auth[8] = '\0';
+			msg.data = (string)SUCCESS;
+			msg.header.size = 1;
+
+			client.snd(msg);
+
+			memset(&msg, 0, sizeof(main_msg));
+			client.receive(msg);
+
+			if (msg.data == (string)FAILURE)
+			{
+				cerr << "UI::execute- status: Problem occurred\n";
+			}
+			else if (msg.data == (string)SUCCESS)
+			{
+				printf("(cloud) No files uploaded so far.");
+			}
+			else
+			{
+				printf("(cloud) Status:\n%s", msg.data.c_str());
+			}
 		}
 		else if (op.substr(0, spaceIdx) == "download")
 		{
@@ -159,6 +184,60 @@ void UI::run()
 		}
 		else if (op.substr(0, spaceIdx) == "upload")
 		{
+			string inputFilePath = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
+			string inputFileName; // Without path (\\)
+			//cerr << "File name: " << inputFilePath;
+			ifstream inputFile;
+			inputFile.open(inputFilePath, ios::binary);
+			if (!inputFile.is_open())
+			{
+				printf("(cloud) No such file.");
+				continue;
+			}
+			//inputFile >> fileContent;
+			string fileContent(istreambuf_iterator<char>(inputFile), {});
+
+			inputFile.close();
+			cerr << "File size is: " << fileContent.size() << "\n";
+			cerr << "File.data() size is " << strlen(fileContent.data()) << "\n";
+			cerr << "File.c_str() size is " << strlen(fileContent.c_str()) << "\n";
+			size_t namePos = inputFilePath.find_last_of("\\");
+			size_t namePos2 = inputFilePath.find_last_of("/");
+			if (namePos != string::npos)
+				inputFileName = inputFilePath.substr(namePos + 1, inputFilePath.size() - namePos - 1);
+			else if (namePos2 != string::npos)
+				inputFileName = inputFilePath.substr(namePos2 + 1, inputFilePath.size() - namePos - 1);
+			else
+				inputFileName = inputFilePath;
+
+			const char *fileDataErr = fileContent.c_str();
+
+			//printf("UI::execute- file binary:%s", fileDataErr);
+
+			main_msg msg;
+			memset(&msg, 0, sizeof(main_msg));
+
+			msg.header.type = Upload;
+			strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
+			msg.header.auth[8] = '\0';
+	
+			msg.data = inputFileName + "*";
+			msg.data += fileContent;
+			msg.header.size = msg.data.size();
+			printf("in UI: %lld", msg.data.size());
+			client.snd(msg);
+
+			memset(&msg, 0, sizeof(main_msg));
+			client.receive(msg);
+
+			if (msg.data == (string)SUCCESS)
+			{
+				printf("(cloud) %s uploaded successfully!", inputFilePath.c_str());
+			}
+			else
+			{
+				printf("(cloud) Problem occurred, please try again and check that the file location you provided is correct.");
+			}
 
 		}
 		else if (op.substr(0, spaceIdx) == "share")

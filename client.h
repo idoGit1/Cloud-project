@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <vector>
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
@@ -27,11 +28,12 @@ public:
 	void encrypt(char *);
 	void decrypt(char *);
 
-	string encode(main_msg);
+	string encode(main_msg &);
 	MessageHeader decodeHeader(char *);
 	//main_msg decode(char *);
 
-	int snd(main_msg);
+	//int sendFile(main_msg, vector<string> &);
+	int snd(main_msg &);
 	int receive(main_msg &);
 };
 
