@@ -1,6 +1,7 @@
 #pragma once
 #define UM_H_
-#define DATABASE_FILE "user_list.db\0"
+#define DATABASE_FILE "D:\\Cloud project\\Cloud\\Data\\user_list.db\0"
+#define DATA_PATH "D:\\Cloud project\\Cloud\\Data\\"
 #define TABLE "list"
 #ifndef COMMON_H_
 #include "common.h"
@@ -18,6 +19,10 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <sys/stat.h>
+namespace fs = std::filesystem;
+
 class UM
 {
 private:

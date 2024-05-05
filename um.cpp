@@ -83,12 +83,14 @@ main_msg UM::failure(Operation type)
 
 main_msg UM::execute(main_msg msg)
 {
+	printf("UM::execute\n");
 	//typedef enum { Logout, Signup, Login, Download, Upload, Share, Status} Operation;
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 	{
 		cerr << "UM::execute- Authentication failed\n";
 		return failure(msg.header.type);
 	}
+	cerr << "Executing " << (int)msg.header.type << "\n";
 	switch (msg.header.type)
 	{
 	case Quit:
@@ -137,8 +139,8 @@ main_msg UM::signup(main_msg msg)
 	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
-	currentUser.username = username;
-	currentUser.password = password;
+	//currentUser.username = username;
+	//currentUser.password = password;
 
 	// TO DO: check if username is unique:
 	sqlite3 *db;
@@ -154,7 +156,7 @@ main_msg UM::signup(main_msg msg)
 		exit(1);
 	}
 	query = "INSERT INTO " + (string)TABLE + 
-		" VALUES('" + currentUser.username + "', '" + currentUser.password +
+		" VALUES('" + username + "', '" + password +
 		"');";
 	cerr << "Query: " << query;
 
@@ -162,6 +164,25 @@ main_msg UM::signup(main_msg msg)
 
 	if (exitResult == SQLITE_OK)
 	{
+		fs::path folderPath = ((string)DATA_PATH + username);
+
+		if (fs::exists(folderPath))
+		{
+			cerr << "UM::singup- folder exists.";
+			exit(1);
+		}
+		else
+		{
+			if (fs::create_directory(folderPath))
+			{
+				cerr << "Folder for user " << username << " created successfully.";
+			}
+			else
+			{
+				cerr << "UM::signup- Folder for " << username << " failed to create.";
+				exit(1);
+			}
+		}
 		return success(msg.header.type);
 	}
 	else
@@ -223,10 +244,11 @@ main_msg UM::login(main_msg msg)
 	{
 		currentUser = User(user1);
 		authentication = generateAuthentication();
-
+		cerr << authentication << "\n";
 		main_msg respond;
 		memset(&respond, 0, sizeof(main_msg));
 		//respond.data = authentication;
+
 		respond.data = (string)SUCCESS;
 		respond.header.type = Login;
 		strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
@@ -248,10 +270,22 @@ main_msg UM::download(main_msg msg)
 
 main_msg UM::upload(main_msg msg)
 {
-	
-		// YES: locate directory and create + upload file, return success
-		// NO: return failure
-	return null();
+	printf("UM::upload\n");
+	size_t starPos = msg.data.find("*");
+	string outFileName = msg.data.substr(0, starPos);
+	string fileContent = msg.data.substr(starPos + 1, msg.data.size() - starPos);
+	// Need to check if file is already exist.
+	ofstream outFile(((string)DATA_PATH + currentUser.username + "\\" + outFileName), ios::binary);
+	cerr << ((string)DATA_PATH + outFileName);
+	// Need to check if worked.
+	if (outFile)
+	{
+		outFile.write(fileContent.data(), fileContent.size());
+		//outFile << fileContent;
+		outFile.close();
+		return success(msg.header.type);
+	}
+	return failure(msg.header.type);
 }
 
 main_msg UM::share(main_msg msg)
@@ -261,8 +295,50 @@ main_msg UM::share(main_msg msg)
 
 main_msg UM::status(main_msg msg)
 {
-	return null();
-	// TO DO:
+	printf("UM::status\n");
+	main_msg respond;
+	memset(&respond, 0, sizeof(main_msg));
+
+	string path = (string)DATA_PATH + currentUser.username; // The directory with the user's files.
+	string data = "";
+	fs::path fileName;
+	string fileNameStr;
+	bool hasFiles = false;
+	for (const fs::directory_entry &entry : fs::directory_iterator(path))
+	{
+		hasFiles = true;
+		fileName = entry.path();
+		fileNameStr = fileName.string();
+
+		// Remove the starting - D:\\Cloud project...
+
+		int perffixLen = ((string)DATA_PATH).size();
+		data += "\t";
+		data += fileNameStr.substr(perffixLen, fileNameStr.size() - perffixLen);
+		data += "\n";
+	}
+
+	if (!hasFiles)
+	{
+		respond.header.type = Status;
+		strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
+		respond.header.auth[8] = '\0';
+
+		respond.data = (string)SUCCESS;
+
+		respond.header.size = 1;
+		return respond;
+	}
+
+	respond.header.type = Status;
+	strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
+	respond.header.auth[8] = '\0';
+
+	respond.data = (string)data;
+
+	respond.header.size = respond.data.size();
+
+	return respond;
 }
 
 

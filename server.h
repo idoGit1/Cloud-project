@@ -8,7 +8,6 @@
 #ifndef COMMON_H_
 #include "common.h"
 #endif
-
 #ifndef UM_H_
 #include "um.h"
 #endif
@@ -27,6 +26,7 @@ private:
 	WSADATA wsaData;
 	SOCKET listenSocket;
 	struct sockaddr_in serverAddress;
+	//vector<string>dataChunks;
 public:
 	Server();
 
@@ -48,6 +48,9 @@ public:
 
 	int snd(SOCKET, main_msg);
 	int receive(SOCKET, main_msg &);
+
+	//int receiveFile(SOCKET, main_msg &);
+
 	void run();
 
 };

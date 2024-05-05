@@ -1,0 +1,6 @@
+﻿  Server.cpp
+D:\Cloud project\Cloud\Cloud\Cloud\Server.cpp(11,9): warning C4101: 'result': unreferenced local variable
+D:\Cloud project\Cloud\Cloud\Cloud\Server.cpp(45,13): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+D:\Cloud project\Cloud\Cloud\Cloud\Server.cpp(202,69): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+D:\Cloud project\Cloud\Cloud\Cloud\Server.cpp(258,64): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  Cloud.vcxproj -> D:\Cloud project\Cloud\Cloud\x64\Debug\Cloud.exe

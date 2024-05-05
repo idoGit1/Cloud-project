@@ -41,6 +41,7 @@ Server::~Server()
 
 string Server::encode(main_msg msg)
 {
+    printf("Server::encode\n");
     int len = log10(msg.header.size) + 1;
     string strNum = to_string(msg.header.size);
     strNum.insert(0, SIZE_LENGTH - len, '0');
@@ -52,15 +53,15 @@ string Server::encode(main_msg msg)
 
 MessageHeader Server::decodeHeader(char *str)
 {
-    printf("\nServer::decodeHeader- %s\n", str);
+    printf("Server::decodeHeader\n");
     MessageHeader result;
     memset(&result, 0, sizeof(result));
 
     string input = str;
 
     int inputSize = stoi(input.substr(0, SIZE_LENGTH));
-    Operation inputType = (Operation)stoi(input.substr(SIZE_LENGTH, SIZE_LENGTH + 1));
-    string auth = input.substr(SIZE_LENGTH + 1, SIZE_LENGTH + 9);
+    Operation inputType = (Operation)stoi(input.substr(SIZE_LENGTH, 1));
+    string auth = input.substr(SIZE_LENGTH + 1, 8);
 
     result.size = inputSize;
     strncpy_s(result.auth, 9, auth.c_str(), strlen(auth.c_str()));
@@ -73,6 +74,7 @@ MessageHeader Server::decodeHeader(char *str)
 
 SOCKET Server::acceptClient()
 {
+    printf("Server::acceptClient\n");
     SOCKET clientSocket;
     // Accepting a client. In the future add thread.
     try
@@ -86,13 +88,14 @@ SOCKET Server::acceptClient()
         closesocket(clientSocket);
         exit(errorCode);
     }
-    /*std::*/cerr << "Client accepted succesfully\n";
+    ///*std::*/cerr << "Client accepted succesfully\n";
     return clientSocket;
 }
 
 
 void Server::handleClient(SOCKET clientSocket)
 {
+    printf("Server::handleClient\n");
     main_msg msg;
     main_msg eResult;
 
@@ -104,20 +107,21 @@ void Server::handleClient(SOCKET clientSocket)
     // info
     while (receive(clientSocket, msg))
     {
-        /*std::*/cerr << "Received: " << msg.data << "\n";
+        ///*std::*/cerr << "Received: " << msg.data << "\n";
+        //cerr << "calling for exec for type: " << (int)msg.header.type << "\n";
         eResult = user->execute(msg); // First message will be the auth messgae.
         // If at some point the user will quit, the user object will erase its auth
         // details and at the next time login the new user.
         // create response
         if (snd(clientSocket, eResult) < 0)
         {
-            /*std::*/cerr << "Sending error\n";
+            ///*std::*/cerr << "Sending error\n";
             closesocket(clientSocket);
             exit(1);
         }
         ///*std::*/cerr << "Sent: " << eResult << "\n";
     }
-    /*std::*/cerr << "Connection ended.\n";
+    ///*std::*/cerr << "Connection ended.\n";
     closesocket(clientSocket);
     delete[] user;
 }
@@ -146,17 +150,18 @@ void Server::build()
 
 void Server::run()
 {
+    printf("Server::run\n");
     SOCKET clientSocket;
     // Creating server socket, binding to ip and listening.
     
     build();
-    /*std::*/cout << "Server is up and running!\n";
+   // /*std::*/cout << "Server is up and running!\n";
 
     while (true)
     {
         clientSocket = acceptClient();
 
-        cerr << "Client accepted.\n";
+        //cerr << "Client accepted.\n";
 
         handleClient(clientSocket);
         //thread t(handleClient, clientSocket);
@@ -168,47 +173,89 @@ void Server::run()
 
 int Server::receive(SOCKET clientSocket, main_msg &msg)
 {
+    printf("Server::receive\n");
+    static int cnt = 1;
+    int iResult = 0;
     memset(&msg, 0, sizeof(main_msg));
     char *buffer = new char[HEADER_STRING_SIZE + 1];
     memset(buffer, 0, HEADER_STRING_SIZE + 1);
-    int iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
+    iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
     buffer[HEADER_STRING_SIZE] = '\0';
     if (iResult < 0)
         return iResult;
 
     //decrypt(buffer);
-    
+    //printf("\n\n\n\nServer::receive %d", cnt);
+    cnt++;
     MessageHeader header;
     memset(&header, 0, sizeof(MessageHeader));
     header = decodeHeader(buffer);
 
     buffer = new char[header.size + 1];
-
+    iResult = 0;
     memset(buffer, 0, header.size + 1);
-    iResult = recv(clientSocket, buffer, header.size, 0);
+    try {
+        for (int i = 0; i < header.size / 4096; i++)
+        {
+            iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
+        }
+        iResult += recv(clientSocket, &buffer[iResult], header.size - iResult, 0);
+        if (iResult != header.size)
+            throw 4;
+    }
+    catch (...)
+    {
+        printf("Error");
+    }
+
+    
+    
+    //int iter = 0;
+    /*while (iResult != header.size)
+    {
+        iter++;
+        cerr << "Server::receive---Bytes missing";
+        iResult += recv(clientSocket, &buffer[iResult], header.size, 0);
+        if (iter == 5)
+        {
+            cerr << "problem receiving data in Server::receive";
+            exit(1);
+        }
+    }*/
+    //cerr << strlen(buffer);
+    /*if (msg.header.type == Upload)
+    {
+        int realSize = stoi(msg.data.substr(0, 9));
+        msg.data = string(buffer, realSize);
+        buffer[realSize]
+    }*/
     buffer[header.size] = '\0';
     //decrypt(buffer);
-    cerr << (string)buffer;
-    msg.data = (string)buffer;
-    msg.header = header;
+    //cerr << (string)buffer;
+    //msg.data = (string)buffer;
+    msg.data = string(buffer, header.size);
+    //cerr << "msg.data.size() received: " << msg.data.size() << "\n";
+    //cerr << "bytes received: " << iResult << ".\nsize of data: " << msg.data.size();
+    msg.header = copyHeader(header);
     
-    cerr << "\nmsg.data: " << msg.data << "\n";
-
+    //cerr << "\nreceived: " << iResult << " bytes\n";
+    delete[] buffer;
     return iResult;
 }
 
 
 int Server::snd(SOCKET clientSocket, main_msg msg)
 {
+    printf("Server::snd\n");
     int iSendResult;
     string result = encode(msg);
-    size_t mSize = strlen(result.c_str()); // Message size
+    //size_t mSize = strlen(result.c_str()); // Message size
 
-    printf("\nServer::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
-        msg.header.auth, msg.data.c_str());
+    //printf("\nServer::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
+       // msg.header.auth, msg.data.c_str());
     //encrypt(strMsg);
 
-    iSendResult = send(clientSocket, result.c_str(), mSize, 0);
+    iSendResult = send(clientSocket, result.data(), result.size(), 0);
     return iSendResult;
 }
 

@@ -9,12 +9,17 @@
 #include <string>
 using namespace std;
 
+
+
+
 struct MessageHeader
 {
 	size_t size; // Size of the data
 	Operation type;
-	char auth[9]; // Authehntication token.
+	char auth[9]; // Authentication token.
 };
+
+MessageHeader copyHeader(MessageHeader &);
 
 struct main_msg
 {
