@@ -180,6 +180,43 @@ void UI::run()
 		}
 		else if (op.substr(0, spaceIdx) == "download")
 		{
+			string inputFileName = op.substr(spaceIdx + 1, op.size() - spaceIdx -1);
+			main_msg msg;
+			memset(&msg, 0, sizeof(main_msg));
+
+			msg.header.type = Download;
+			strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
+			msg.header.auth[8] = '\0';
+			msg.data = (string)inputFileName;
+			msg.header.size = msg.data.size();
+
+			client.snd(msg);
+			memset(&msg, 0, sizeof(main_msg));
+			client.receive(msg);
+
+			if (msg.data != (string)FAILURE)
+			{
+				size_t starPos = msg.data.find("*");
+				string outFileName = msg.data.substr(0, starPos);
+				string fileContent = msg.data.substr(starPos + 1, msg.data.size() - starPos);
+				// Need to check if file is already exist.
+				ofstream outFile(outFileName, ios::binary);
+				cerr << outFileName;
+				// Need to check if worked.
+				if (outFile)
+				{
+					outFile.write(fileContent.data(), fileContent.size());
+					//outFile << fileContent;
+					outFile.close();
+					printf("(cloud) %s downloaded successfully!", inputFileName);
+				}
+				else
+				{
+					printf("UI::download file did not open\n");
+				}
+			}
+			else
+				printf("(cloud) Problem occurred. Double check the name of the file.");
 
 		}
 		else if (op.substr(0, spaceIdx) == "upload")
@@ -210,7 +247,7 @@ void UI::run()
 			else
 				inputFileName = inputFilePath;
 
-			const char *fileDataErr = fileContent.c_str();
+			//const char *fileDataErr = fileContent.c_str();
 
 			//printf("UI::execute- file binary:%s", fileDataErr);
 

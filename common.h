@@ -13,7 +13,6 @@
 #define IP "127.0.0.1"
 #define SIZE_LENGTH 9
 #define HEADER_STRING_SIZE 18
-
 //#define SIZE (int)1e9
 #define FAMILY AF_INET
 #define TYPE SOCK_STREAM

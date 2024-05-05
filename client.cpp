@@ -104,30 +104,70 @@ int Client::snd(main_msg &msg)
 
 int Client::receive(main_msg &msg)
 {
+    printf("Server::receive\n");
+    int iResult = 0;
     memset(&msg, 0, sizeof(main_msg));
     char *buffer = new char[HEADER_STRING_SIZE + 1];
     memset(buffer, 0, HEADER_STRING_SIZE + 1);
-    int iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
+    iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
     buffer[HEADER_STRING_SIZE] = '\0';
     if (iResult < 0)
         return iResult;
 
     //decrypt(buffer);
-
-    MessageHeader header = decodeHeader(buffer);
+    //printf("\n\n\n\nServer::receive %d", cnt);
+    MessageHeader header;
+    memset(&header, 0, sizeof(MessageHeader));
+    header = decodeHeader(buffer);
 
     buffer = new char[header.size + 1];
-
+    iResult = 0;
     memset(buffer, 0, header.size + 1);
-    iResult = recv(clientSocket, buffer, header.size, 0);
+    try {
+        for (int i = 0; i < header.size / 4096; i++)
+        {
+            iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
+        }
+        iResult += recv(clientSocket, &buffer[iResult], header.size - iResult, 0);
+        if (iResult != header.size)
+            throw 4;
+    }
+    catch (...)
+    {
+        printf("Error");
+    }
+
+
+
+    //int iter = 0;
+    /*while (iResult != header.size)
+    {
+        iter++;
+        cerr << "Server::receive---Bytes missing";
+        iResult += recv(clientSocket, &buffer[iResult], header.size, 0);
+        if (iter == 5)
+        {
+            cerr << "problem receiving data in Server::receive";
+            exit(1);
+        }
+    }*/
+    //cerr << strlen(buffer);
+    /*if (msg.header.type == Upload)
+    {
+        int realSize = stoi(msg.data.substr(0, 9));
+        msg.data = string(buffer, realSize);
+        buffer[realSize]
+    }*/
     buffer[header.size] = '\0';
     //decrypt(buffer);
-    cerr << (string)buffer;
-    msg.data = (string)buffer;
+    //cerr << (string)buffer;
+    //msg.data = (string)buffer;
+    msg.data = string(buffer, header.size);
+    //cerr << "msg.data.size() received: " << msg.data.size() << "\n";
+    //cerr << "bytes received: " << iResult << ".\nsize of data: " << msg.data.size();
     msg.header = copyHeader(header);
 
-    cerr << "\nmsg.data: " << msg.data << "\n";
-
+    //cerr << "\nreceived: " << iResult << " bytes\n";
     delete[] buffer;
     return iResult;
 }
