@@ -1,7 +1,7 @@
 #pragma once
 #define USER_H_
-#ifndef COMMON_H_
-#include "common.h"
+#ifndef MY_PROJECT_HEADER_H_
+#include <d:/Cloud project/Header/my_project_header.h>
 #endif
 class User
 {

@@ -1,12 +1,13 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
 #define CLIENT_H_
-#ifndef COMMON_H_
-#include "common.h"
+#ifndef MY_PROJECT_HEADER_H_
+#include <d:/Cloud project/Header/my_project_header.h>
 #endif
 #ifndef MESSAGE_H_
 #include "Message.h"
 #endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <windows.h>
@@ -25,15 +26,15 @@ class Client
 public:
 	Client();
 	~Client();
-	void encrypt(char *);
-	void decrypt(char *);
+	void encrypt(string &);
+	void decrypt(string &);
 
-	string encode(main_msg &);
-	MessageHeader decodeHeader(char *);
-	//main_msg decode(char *);
+	string encode(MainMsg &);
+	MessageHeader decodeHeader(string &);
+	//MainMsg decode(char *);
 
-	//int sendFile(main_msg, vector<string> &);
-	int snd(main_msg &);
-	int receive(main_msg &);
+	//int sendFile(MainMsg, vector<string> &);
+	void snd(MainMsg &);
+	void receive(MainMsg &);
 };
 

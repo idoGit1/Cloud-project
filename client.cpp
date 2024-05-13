@@ -6,20 +6,20 @@
 Client::Client()
 {
     int result;
-    try
-    {
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-        {
-            throw "Winsock initialization failed.";
-        }
-    }
-    catch (string errorMsg)
-    {
-        cerr << errorMsg;
-        exit(1);
-    }
-    clientSocket = socket(FAMILY, TYPE, 0);
 
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        cerr << EXCEPTION_CODES[9];
+        exit(9);
+    }
+
+
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket == INVALID_SOCKET)
+    {
+        cerr << EXCEPTION_CODES[10];
+        exit(10);
+    }
     /*int addrLen = sizeof(serverAddress);
     char *addrStr = new char[strlen(IP) + 1];
     strncpy(addrStr, IP, strlen(IP));
@@ -29,29 +29,18 @@ Client::Client()
     this->serverAddress.sin_port = htons(PORT);
     result = inet_pton(AF_INET, IP, &this->serverAddress.sin_addr.s_addr);
 
-    /*if (result != 0)
+    if (result <= 0)
     {
-        cerr << "Error in conversion";
-        exit(1);
+        cerr << EXCEPTION_CODES[11];
+        exit(11);
     }
-    */
-
-    if (clientSocket == INVALID_SOCKET)
-    {
-        cerr << "Error create client socket";
-        exit(1);
-    }
-    cerr << "Client constructed successfully\n";
-
 
     result = connect(clientSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
-
     if (result == INVALID_SOCKET)
     {
-        cerr << "Error connecting to server";
-        exit(1);
+        cerr << EXCEPTION_CODES[12];
+        exit(12);
     }
-        
 }
 
 
@@ -59,179 +48,133 @@ Client::~Client()
 {
     WSACleanup();
     closesocket(clientSocket);
-    printf("\n\n\n Cleaned up successfully!");
+    printf("\n\n\n Client::~Client - Cleaned up successfully!");
 
 }
 
-
-int Client::snd(main_msg &msg)
+void Client::snd(MainMsg &msg)
 {
-    int iSendResult;
-    string result = encode(msg);
-    //size_t mSize = strlen(result.c_str()); // Message size
-
-    //printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
-        //msg.header.auth, msg.data.c_str());
-    //encrypt(strMsg);
-    if (result.size() != msg.header.size + 18)
-        printf("Client::snd\n");
-    iSendResult = send(clientSocket, result.data(), result.size(), 0);
-    if (iSendResult != result.size())
-        printf("Client::snd2\n");
-    cerr << "Sent " << iSendResult << " bytes\n";
-    return iSendResult;
-}
-
-
-/*int Client::sendFile(main_msg msg, vector<string> &dataChunks)
-{
-    snd(msg);
-    main_msg line;
-    for (int i = 0; i < dataChunks.size(); i++)
+    // Counts the bytes sent.
+    int iSendResult = 0;
+    string encodedMsg;
+    // Transforming the struct MainMsg to a string.
+    encodedMsg = encode(msg);
+    //encrypt(encodedMsg);
+    // Sending the data as char array (.data()).
+    iSendResult = send(clientSocket, encodedMsg.data(), encodedMsg.size(), 0);
+    // If the number of bytes sent is not equal to the size of the 
+    // encoded message cerr << EXCEPTION_CODES[an error.
+    if (iSendResult != encodedMsg.size())
     {
-        memset(&line, 0, sizeof(main_msg));
-
-        line.header.type = Upload;
-        strncpy_s(line.header.auth, 9, msg.header.auth, 8);
-        line.header.auth[8] = '\0';
-        line.data = (string)dataChunks[i];
-        line.header.size = line.data.size();
-        snd(line);
+        cerr << EXCEPTION_CODES[13];
+        exit(13);
     }
-}*/
+}
 
-
-
-int Client::receive(main_msg &msg)
+void Client::receive(MainMsg &msg)
 {
-    printf("Server::receive\n");
+    // Count number of bytes received
     int iResult = 0;
-    memset(&msg, 0, sizeof(main_msg));
+    // Initiating all memory to 0
+    cleanMsg(msg);
+
     char *buffer = new char[HEADER_STRING_SIZE + 1];
     memset(buffer, 0, HEADER_STRING_SIZE + 1);
+    // Receiving the header which has a constant size. Contains- size of data, type of action, authenticatoin.
     iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
+    if (iResult != HEADER_STRING_SIZE)
+    {
+        cerr << EXCEPTION_CODES[14];
+        exit(14);
+    }
+
     buffer[HEADER_STRING_SIZE] = '\0';
-    if (iResult < 0)
-        return iResult;
+    string decryptedBuffer(buffer, HEADER_STRING_SIZE);
+    //decrypt(decryptedBuffer);
+    MessageHeader decodedHeader;
 
-    //decrypt(buffer);
-    //printf("\n\n\n\nServer::receive %d", cnt);
-    MessageHeader header;
-    memset(&header, 0, sizeof(MessageHeader));
-    header = decodeHeader(buffer);
+    decodedHeader = decodeHeader(decryptedBuffer);
 
-    buffer = new char[header.size + 1];
+    buffer = new char[decodedHeader.size + 1];
     iResult = 0;
-    memset(buffer, 0, header.size + 1);
-    try {
-        for (int i = 0; i < header.size / 4096; i++)
-        {
-            iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
-        }
-        iResult += recv(clientSocket, &buffer[iResult], header.size - iResult, 0);
-        if (iResult != header.size)
-            throw 4;
+    memset(buffer, 0, decodedHeader.size + 1);
+
+    // Receiving data in chunks of 4096 bytes (4 kb)
+    // To avoid data loss.
+    for (int i = 0; i < decodedHeader.size / 4096; i++)
+        iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
+    // The last part of the data. (For example if the size is 4097, it will be 1).
+    iResult += recv(clientSocket, &buffer[iResult], decodedHeader.size - iResult, 0);
+    // If number of bytes received is not equal the size specified in the decodedHeader
+
+    if (iResult != decodedHeader.size)
+    {
+        cerr << EXCEPTION_CODES[14];
+        exit(14);
     }
-    catch (...)
-    {
-        printf("Error");
-    }
+ 
+    buffer[decodedHeader.size] = '\0';
+    string data(buffer, decodedHeader.size);
+    //decrypt(data);
 
+    msg.data = string(data);
+    msg.header = copyHeader(decodedHeader);
 
-
-    //int iter = 0;
-    /*while (iResult != header.size)
-    {
-        iter++;
-        cerr << "Server::receive---Bytes missing";
-        iResult += recv(clientSocket, &buffer[iResult], header.size, 0);
-        if (iter == 5)
-        {
-            cerr << "problem receiving data in Server::receive";
-            exit(1);
-        }
-    }*/
-    //cerr << strlen(buffer);
-    /*if (msg.header.type == Upload)
-    {
-        int realSize = stoi(msg.data.substr(0, 9));
-        msg.data = string(buffer, realSize);
-        buffer[realSize]
-    }*/
-    buffer[header.size] = '\0';
-    //decrypt(buffer);
-    //cerr << (string)buffer;
-    //msg.data = (string)buffer;
-    msg.data = string(buffer, header.size);
-    //cerr << "msg.data.size() received: " << msg.data.size() << "\n";
-    //cerr << "bytes received: " << iResult << ".\nsize of data: " << msg.data.size();
-    msg.header = copyHeader(header);
-
-    //cerr << "\nreceived: " << iResult << " bytes\n";
-    delete[] buffer;
-    return iResult;
+    delete buffer;
 }
 
 
 
-void Client::encrypt(char *buffer)
+void Client::encrypt(string &buffer)
 {
-    for (int i = 0; i < strlen(buffer); i++)
-    {
-        buffer[i] = ~buffer[i] ^ 1;
-    }
-}
-
-
-void Client::decrypt(char *buffer)
-{
-    for (int i = 0; i < strlen(buffer); i++)
+    for (int i = 0; i < buffer.size(); i++)
     {
         buffer[i] = ~buffer[i];
     }
 }
 
 
-string Client::encode(main_msg &msg)
+void Client::decrypt(string &buffer)
 {
-    size_t len = log10(msg.header.size) + 1;
+    for (int i = 0; i < buffer.size(); i++)
+    {
+        buffer[i] = ~buffer[i];
+    }
+}
+
+string Client::encode(MainMsg &msg)
+{
+    size_t len = 0;
+    len = log10(msg.header.size) + 1;
+    if (len > 9)
+    {
+        cerr << EXCEPTION_CODES[15];
+        exit(15);
+    }
+
     string strNum = to_string(msg.header.size);
-    printf("%lld", ((string)msg.header.auth).size());
     strNum.insert(0, SIZE_LENGTH - len, '0');
     string str = strNum + to_string((int)msg.header.type)
         + (string)(msg.header.auth) + msg.data;
 
-    printf("size str: %d size data: %d\n", str.size(), msg.data.size());
-    printf("%c\n", str[str.size() - 1]);
     str.resize(msg.header.size + 18);
     return str;
 }
 
-MessageHeader Client::decodeHeader(char *str)
+MessageHeader Client::decodeHeader(string &buffer)
 {
-    printf("\nServer::decodeHeader- %s\n", str);
-    MessageHeader result;
-    memset(&result, 0, sizeof(result));
+    //printf("\nServer::decodeHeader- %s\n", str);
+    MessageHeader decodedHeader;
 
-    string input = str;
 
-    int inputSize = stoi(input.substr(0, SIZE_LENGTH));
-    Operation inputType = (Operation)stoi(input.substr(SIZE_LENGTH, SIZE_LENGTH + 1));
-    string auth = input.substr(SIZE_LENGTH + 1, SIZE_LENGTH + 9);
+    int inputSize = stoi(buffer.substr(0, SIZE_LENGTH));
+    Operation inputType = (Operation)stoi(buffer.substr(SIZE_LENGTH, 1));
+    string auth = buffer.substr(SIZE_LENGTH + 1, 8);
 
-    result.size = inputSize;
-    strncpy_s(result.auth, 9, auth.c_str(), strlen(auth.c_str()));
-    result.auth[8] = '\0';
-    result.type = inputType;
+    decodedHeader.size = inputSize;
+    strncpy_s(decodedHeader.auth, 9, auth.c_str(), strlen(auth.c_str()));
+    decodedHeader.auth[8] = '\0';
+    decodedHeader.type = inputType;
 
-    return result;
+    return decodedHeader;
 }
-
-
-
-/*main_msg Client::decode(char *str)
-{
-    main_msgmsg = new Message();
-    memcpy(msg, str, sizeof(str));
-    return msg;
-}*/

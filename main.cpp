@@ -7,8 +7,8 @@
 #ifndef MESSAGE_H_
 #include "message.h"
 #endif
-#ifndef COMMON_H_
-#include "common.h"
+#ifndef MY_PROJECT_HEADER_H_
+#include "d:/Cloud project/Header/my_project_header.h"
 #endif
 #ifndef CLIENT_H_
 #include "client.h"
@@ -16,9 +16,9 @@
 
 int main()
 {
-	printf("Size of main_msg struct: %zu\n", sizeof(main_msg));
+	printf("Size of main_msg struct: %zu\n", sizeof(MainMsg));
 
-	UI ui;
+	UI ui = UI();
 	ui.run();
 
 	return 0;

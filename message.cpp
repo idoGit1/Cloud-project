@@ -11,6 +11,16 @@ MessageHeader copyHeader(MessageHeader &obj)
 	return cpy;
 }
 
+
+
+void cleanMsg(MainMsg &msg)
+{
+	memset(msg.header.auth, 0, 9);
+	msg.header.type = Null;
+	msg.header.size = 0;
+	msg.data = "";
+}
+
 /*
 Message::Message()
 {
