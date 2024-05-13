@@ -10,12 +10,19 @@ MessageHeader copyHeader(MessageHeader &obj)
 	return cpy;
 }
 
+void cleanMsg(MainMsg &msg)
+{
+	memset(msg.header.auth, 0, 9);
+	msg.header.type = Null;
+	msg.header.size = 0;
+	msg.data = "";
+}
 
 /*
 Message::Message()
 {
 	msg.header.auth.reserve(8);
-	memset(&msg, 0, sizeof(main_msg));
+	memset(&msg, 0, sizeof(MainMsg));
 }
 
 Message::Message(uint64_t size, Operation type)

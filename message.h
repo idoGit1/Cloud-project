@@ -1,7 +1,7 @@
 #pragma once
 #define MESSAGE_H_
-#ifndef COMMON_H_
-#include "common.h"
+#ifndef MY_PROJECT_HEADER_H_
+#include "d:/Cloud project/Header/my_project_header.h"
 #endif
 #define SUCCESS (string)"1"
 #define FAILURE (string)"0"
@@ -17,19 +17,34 @@ struct MessageHeader
 	size_t size; // Size of the data
 	Operation type;
 	char auth[9]; // Authentication token.
+
+	MessageHeader()
+	{
+		size = 0;
+		type = Null;
+		memset(auth, 0, 8);
+	}
 };
 
 MessageHeader copyHeader(MessageHeader &);
-
-struct main_msg
+struct MainMsg
 {
 	MessageHeader header;
 	string data;
+
+	MainMsg()
+	{
+		// Header is init automatically.
+		data = "";
+	}
 };
+
+void cleanMsg(MainMsg &);
+
 /*
 class Message
 {
-	main_msg msg;
+	MainMsg msg;
 	//MessageHeader header;
 	//string data;
 public:

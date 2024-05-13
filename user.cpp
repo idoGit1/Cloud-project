@@ -9,7 +9,7 @@ User::User()
 	username = "";
 	password = "";
 }
-User::User(User &user)
+User::User(const User &user)
 {
 	username = user.username;
 	password = user.password;

@@ -1,6 +1,10 @@
 #include "um.h"
 
+static mutex signupMtx;
+static mutex loginMtx;
+static vector<User> activeUsers;
 static string SQLPassword;
+
 int callback(void *data, int argc, char **argv, char **azColName)
 {
 	int i;
@@ -24,30 +28,41 @@ void UM::createDatabase()
 
 	char *errMsg;
 	int exitResult;
-
-	exitResult = sqlite3_open(DATABASE_FILE, &db);
-	if (exitResult == SQLITE_OK)
-		cerr << "Database (user list) created successfully!\n";
-	else
+	try
 	{
-		cerr << "Failed to create database (user list)\n";
-		exit(1);
+		exitResult = sqlite3_open(DATABASE_FILE, &db);
+		if (exitResult == SQLITE_OK)
+			cerr << "Database (user list) created successfully!\n";
+		else
+			cerr << EXCEPTION_CODES[17];
+	}
+	catch (int errorCode)
+	{
+		cerr << EXCEPTION_CODES[errorCode];
+		exit(errorCode);
 	}
 	// SQL query to create table where username and password are required. 
 	// In addition, username is PRIMARY KEY, which means that it is unique.
 	query = "CREATE TABLE list("
 		"username TEXT PRIMARY KEY,"
 		"password TEXT);";
-
-	exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
-
-	if (exitResult == SQLITE_OK)
-		cerr << "Users table created successfully!\n";
-	else
+	try
 	{
-		cerr << "Failed to create users table.\n" << (string)errMsg;
-		exit(1);
+		exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
+
+		if (exitResult == SQLITE_OK)
+			cerr << "Users table created successfully!\n";
+		else
+		{
+			cerr << EXCEPTION_CODES[18];
+		}
 	}
+	catch (int errorCode)
+	{
+		cerr << EXCEPTION_CODES[errorCode] << "\n";
+		exit(errorCode);
+	}
+	
 }
 
 UM::UM()
@@ -56,23 +71,23 @@ UM::UM()
 }
 
 
-main_msg UM::success(Operation type)
+MainMsg UM::success(Operation type)
 {
-	main_msg success;
-	memset(&success, 0, sizeof(main_msg));
+	MainMsg success;
+
 	success.header.type = type;
-	strncpy_s(success.header.auth, 9, BLANKAUTH, 8);
+	strncpy_s(success.header.auth, 9, authentication.c_str(), 8);
 	success.header.auth[8] = '\0';
 	success.data = (string)SUCCESS;
 	success.header.size = 1;
 	return success;
 }
-main_msg UM::failure(Operation type)
+MainMsg UM::failure(Operation type)
 {
-	main_msg failure;
-	memset(&failure, 0, sizeof(main_msg));
+	MainMsg failure;
+
 	failure.header.type = type;
-	strncpy_s(failure.header.auth, 9, BLANKAUTH, 8);
+	strncpy_s(failure.header.auth, 9, authentication.c_str(), 8);
 	failure.header.auth[8] = '\0';
 	failure.data = (string)FAILURE;
 	failure.header.size = 1;
@@ -81,56 +96,68 @@ main_msg UM::failure(Operation type)
 }
 
 
-main_msg UM::execute(main_msg msg)
+MainMsg UM::execute(MainMsg msg)
 {
-	printf("UM::execute\n");
-	//typedef enum { Logout, Signup, Login, Download, Upload, Share, Status} Operation;
+	MainMsg result;
+		
+
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
-	{
-		cerr << "UM::execute- Authentication failed\n";
-		return failure(msg.header.type);
-	}
-	cerr << "Executing " << (int)msg.header.type << "\n";
+		cerr << EXCEPTION_CODES[19];
+	cerr << authentication << "\n";
 	switch (msg.header.type)
 	{
 	case Quit:
-		return quit(msg);
+		result = quit(msg);
+		break;
 	case Signup:
-		return signup(msg);
+		result = signup(msg);
+		break;
 	case Login:
-		return login(msg);
+		result = login(msg);
+		break;
 	case Download:
-		return download(msg);
+		result = download(msg);
+		break;
 	case Upload:
-		return upload(msg);
+		result = upload(msg);
+		break;
 	case Share:
-		return share(msg);
+		result = share(msg);
+		break;
 	case Status:
-		return status(msg);
+		result = status(msg);
+		break;
+	case Remove:
+		result = remove_(msg);
+		break;
 	case Exit:
 		exit_(msg);
+		break;
 	default:
-		exit(1);
+		cerr << EXCEPTION_CODES[16];
+		break;
 	}
-
+	return result;
 }
 
 
-void UM::exit_(main_msg msg)
+void UM::exit_(MainMsg &msg)
 {
 	exit(0);
 }
 
 
-main_msg UM::quit(main_msg msg)
+MainMsg UM::quit(MainMsg &msg)
 {
+	// Erase the user from active users.
+	vector<User>::iterator i = find(activeUsers.begin(), activeUsers.end(), currentUser);
+	activeUsers.erase(i);
 	currentUser = User();
 	authentication = (string)BLANKAUTH;
-
 	return success(msg.header.type);
 }
 
-main_msg UM::signup(main_msg msg)
+MainMsg UM::signup(MainMsg &msg)
 {
 	string strMsg = msg.data; // Format: [username password]
 
@@ -139,15 +166,13 @@ main_msg UM::signup(main_msg msg)
 	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
-	//currentUser.username = username;
-	//currentUser.password = password;
-
-	// TO DO: check if username is unique:
+	
 	sqlite3 *db;
 	char *errMsg;
 	int exitResult;
 	string query;
-	// ADD MUTEX - FILE PROTECTION
+
+	signupMtx.lock();
 	exitResult = sqlite3_open(DATABASE_FILE, &db);
 
 	if (exitResult != SQLITE_OK)
@@ -161,11 +186,11 @@ main_msg UM::signup(main_msg msg)
 	cerr << "Query: " << query;
 
 	exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
+	signupMtx.unlock();
 
 	if (exitResult == SQLITE_OK)
 	{
 		fs::path folderPath = ((string)DATA_PATH + username);
-
 		if (fs::exists(folderPath))
 		{
 			cerr << "UM::singup- folder exists.";
@@ -176,6 +201,14 @@ main_msg UM::signup(main_msg msg)
 			if (fs::create_directory(folderPath))
 			{
 				cerr << "Folder for user " << username << " created successfully.";
+				
+				fs::path shareFolderPath = (DATA_PATH + username + "\\.shared");
+				
+				if (!fs::create_directory(shareFolderPath))
+				{
+					cerr << "UM::signup cannot open share folder\n";
+					exit(85);
+				}
 			}
 			else
 			{
@@ -193,16 +226,7 @@ main_msg UM::signup(main_msg msg)
 	}
 }
 
-
-main_msg UM::null()
-{
-	main_msg Null;
-	memset(&Null, 0, sizeof(main_msg));
-	return Null;
-}
-
-
-main_msg UM::login(main_msg msg)
+MainMsg UM::login(MainMsg &msg)
 {
 	User user1;
 	string strMsg = msg.data; // Format: [username password]
@@ -216,38 +240,41 @@ main_msg UM::login(main_msg msg)
 	user1.username = username;
 	user1.password = password;
 
+	if (find(activeUsers.begin(), activeUsers.end(), user1) != activeUsers.end())
+	{
+		// Need to cerr << EXCEPTION_CODES[an error code.
+		return failure(msg.header.type);
+	}
 
-	// TO DO: check if user is in users list:
-		// Then return auth code
-		// Otherwise return failure
 	sqlite3 *db;
 	char *errMsg;
 	int exitResult;
 	string query;
-	// ADD MUTEX - FILE PROTECTION
-	exitResult = sqlite3_open(DATABASE_FILE, &db);
+	// Protecting file accessing.
+	loginMtx.lock();
 
-	if (exitResult != SQLITE_OK)
-	{
-		cerr << "problem inside login func.\n";
-		exit(1);
-	}
+		exitResult = sqlite3_open(DATABASE_FILE, &db);
+		if (exitResult != SQLITE_OK)
+			cerr << EXCEPTION_CODES[20];
+
 	query = "SELECT password FROM " + (string)TABLE +
 		" WHERE username = '" + user1.username + "';";
 
-	exitResult = sqlite3_exec(db, query.c_str(), callback, 0, &errMsg);
+		exitResult = sqlite3_exec(db, query.c_str(), callback, 0, &errMsg);
+		loginMtx.unlock();
+		if (exitResult != SQLITE_OK)
+			cerr << EXCEPTION_CODES[21];
 
-	if (exitResult != SQLITE_OK)
-		return failure(msg.header.type);
 
 	if (user1.password == SQLPassword)
 	{
 		currentUser = User(user1);
+		// Protecting double accessing from different devices to the same user.
+		activeUsers.push_back(currentUser);
+
 		authentication = generateAuthentication();
-		cerr << authentication << "\n";
-		main_msg respond;
-		memset(&respond, 0, sizeof(main_msg));
-		//respond.data = authentication;
+
+		MainMsg respond;
 
 		respond.data = (string)SUCCESS;
 		respond.header.type = Login;
@@ -260,11 +287,10 @@ main_msg UM::login(main_msg msg)
 	
 }
 
-main_msg UM::download(main_msg msg)
+MainMsg UM::download(MainMsg &msg)
 {
 
-	main_msg result;
-	memset(&result, 0, sizeof(main_msg));
+	MainMsg result;
 
 	string inputFilePath = (string)DATA_PATH + currentUser.username
 		+ "\\" + msg.data; // "D:\\Cloud project\\Cloud\\Data\\'username'\\filename"
@@ -293,7 +319,7 @@ main_msg UM::download(main_msg msg)
 	return result;
 }
 
-main_msg UM::upload(main_msg msg)
+MainMsg UM::upload(MainMsg &msg)
 {
 	printf("UM::upload\n");
 	size_t starPos = msg.data.find("*");
@@ -313,16 +339,36 @@ main_msg UM::upload(main_msg msg)
 	return failure(msg.header.type);
 }
 
-main_msg UM::share(main_msg msg)
+MainMsg UM::share(MainMsg &msg)
 {
-	return null();
+	size_t starIdx = msg.data.find("*");
+	
+	string sharedUsername = msg.data.substr(0, starIdx);
+	string fileName = msg.data.substr(starIdx + 1, msg.data.size() - starIdx - 1);
+
+	string destUserPath = DATA_PATH + sharedUsername + "\\.shared\\" + fileName;
+	string srcUserPath = DATA_PATH + currentUser.username + "\\" + currentUser.username + "_" + fileName;
+
+	// TO DO:
+	// Add in the sqlite db of the sharing user
+
+	ifstream src(srcUserPath, ios::binary);
+	ofstream dest(destUserPath, ios::binary);
+
+	// Taken from stack overflow:
+
+	copy(istreambuf_iterator<char>(src),
+		istreambuf_iterator<char>(),
+		ostreambuf_iterator<char>(dest));
+
+	return success(msg.header.type);
+
 }
 
-main_msg UM::status(main_msg msg)
+MainMsg UM::status(MainMsg &msg)
 {
 	printf("UM::status\n");
-	main_msg respond;
-	memset(&respond, 0, sizeof(main_msg));
+	MainMsg respond;
 
 	string path = (string)DATA_PATH + currentUser.username; // The directory with the user's files.
 	string data = "";
@@ -337,7 +383,7 @@ main_msg UM::status(main_msg msg)
 
 		// Remove the starting - D:\\Cloud project...
 
-		int perffixLen = ((string)DATA_PATH).size();
+		size_t perffixLen = (path + "\\").size();
 		data += "\t";
 		data += fileNameStr.substr(perffixLen, fileNameStr.size() - perffixLen);
 		data += "\n";
@@ -366,12 +412,27 @@ main_msg UM::status(main_msg msg)
 	return respond;
 }
 
+MainMsg UM::remove_(MainMsg &msg)
+{
+	MainMsg respond;
+
+	string path = (string)DATA_PATH + currentUser.username; // The directory with the user's files.
+	string fileName = (string)msg.data;
+	path += "\\" + fileName;
+	if (remove(path.c_str()) == 0)
+		return success(msg.header.type);
+	else
+		return failure(msg.header.type);
+}
+
+
 
 string UM::generateAuthentication()
 {
+	// Taken from geeksforgeeks.
 	mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
 
-	static const char alphanum[] =
+	static const char alphaNum[] =
 		"0123456789"
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		"abcdefghijklmnopqrstuvwxyz";
@@ -379,7 +440,9 @@ string UM::generateAuthentication()
 	auth.reserve(8);
 
 	for (int i = 0; i < 8; ++i) {
-		auth += alphanum[rng() % (sizeof(alphanum) - 1)];
+		auth += alphaNum[rng() % (sizeof(alphaNum) - 1)];
 	}
 	return auth;
 }
+
+

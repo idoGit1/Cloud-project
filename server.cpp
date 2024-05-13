@@ -5,33 +5,36 @@
 using namespace std;
 
 
+
 Server::Server()
 {
+    // Building the server- initializing listenSocket (member) and 
+    // result to check if functions worked.
     listenSocket = 0;
-    int result;
-    try 
-    {
+    int result = 0;
+
+        // Taken from Microsoft tutorial- initializing winsock with 
+        // version 2.2
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-        {
-            throw "Winsock initialization failed.";
+        { 
+            // Init did not work
+            cerr << EXCEPTION_CODES[1];
         }
-        
-    }
-    catch (/*std::*/string errorMsg)
-    {
-        /*std::*/cerr << errorMsg;
-        exit(1);
-    }
+    // Defining the server address/
     this->serverAddress.sin_family = AF_INET;
+    // Defining that the server will listen to every ip address.
     this->serverAddress.sin_addr.s_addr = INADDR_ANY;
+    // Defining port, 1111. Randomly chosen because it is not in use.
     this->serverAddress.sin_port = htons(PORT);
 
-    /*std::*/cerr << "Server constructed succesfully\n";
+    cerr << "Server constructed successfully\n";
 }
 
 
 Server::~Server()
 {
+    // Cleaning up, releasing port and closing socket.
+
     WSACleanup();
     closesocket(listenSocket);
 
@@ -39,79 +42,74 @@ Server::~Server()
 }
 
 
-string Server::encode(main_msg msg)
+string Server::encode(MainMsg msg)
 {
-    printf("Server::encode\n");
-    int len = log10(msg.header.size) + 1;
+    size_t len = 0;
+
+    len = (int)log10(msg.header.size) + 1;
+    if (len > 9)
+        cerr << EXCEPTION_CODES[2];
+
     string strNum = to_string(msg.header.size);
     strNum.insert(0, SIZE_LENGTH - len, '0');
     string str = strNum + to_string((int)msg.header.type)
         + (string)(msg.header.auth) + msg.data;
 
+    str.resize(msg.header.size + 18);
     return str;
 }
 
-MessageHeader Server::decodeHeader(char *str)
+MessageHeader Server::decodeHeader(string &buffer)
 {
-    printf("Server::decodeHeader\n");
-    MessageHeader result;
-    memset(&result, 0, sizeof(result));
+    MessageHeader decodedHeader;
 
-    string input = str;
 
-    int inputSize = stoi(input.substr(0, SIZE_LENGTH));
-    Operation inputType = (Operation)stoi(input.substr(SIZE_LENGTH, 1));
-    string auth = input.substr(SIZE_LENGTH + 1, 8);
+    int inputSize = stoi(buffer.substr(0, SIZE_LENGTH));
+    Operation inputType = (Operation)stoi(buffer.substr(SIZE_LENGTH, 1));
+    string auth = buffer.substr(SIZE_LENGTH + 1, 8);
 
-    result.size = inputSize;
-    strncpy_s(result.auth, 9, auth.c_str(), strlen(auth.c_str()));
-    result.auth[8] = '\0';
-    result.type = inputType;
+    decodedHeader.size = inputSize;
+    strncpy_s(decodedHeader.auth, 9, auth.c_str(), 8);
+    decodedHeader.auth[8] = '\0';
+    decodedHeader.type = inputType;
 
-    return result;
+    return decodedHeader;
 }
-
 
 SOCKET Server::acceptClient()
 {
-    printf("Server::acceptClient\n");
-    SOCKET clientSocket;
+    SOCKET clientSocket = 0;
     // Accepting a client. In the future add thread.
-    try
-    {
+
+        // Taken from Microsoft tutorial
         clientSocket = accept(listenSocket, nullptr, nullptr);
         if (clientSocket == INVALID_SOCKET)
-            throw 4;
-    }
-    catch (int errorCode)
-    {
-        closesocket(clientSocket);
-        exit(errorCode);
-    }
-    ///*std::*/cerr << "Client accepted succesfully\n";
+            cerr << EXCEPTION_CODES[3];
+        else
+            cerr << "Client accepted\n";
     return clientSocket;
 }
 
 
 void Server::handleClient(SOCKET clientSocket)
 {
-    printf("Server::handleClient\n");
-    main_msg msg;
-    main_msg eResult;
+    MainMsg msg;
+    MainMsg eResult;
 
-    memset(&msg, 0, sizeof(main_msg));
-    memset(&eResult, 0, sizeof(main_msg));
 
     // First message coming is the authentication of a user.
-    UM* user = new UM(); // Initializing user manager with the first buffer inputed, that suppose to posses auth
-    // info
+    // Initializing user manager with the first
+    // buffer inputed, that suppose to posses auth
+    UM* user = new UM(); 
     while (receive(clientSocket, msg))
     {
-        ///*std::*/cerr << "Received: " << msg.data << "\n";
-        //cerr << "calling for exec for type: " << (int)msg.header.type << "\n";
-        eResult = user->execute(msg); // First message will be the auth messgae.
-        // If at some point the user will quit, the user object will erase its auth
-        // details and at the next time login the new user.
+        // First message will be the auth messgae.
+
+            eResult = user->execute(msg);
+
+        // If at some point the user will quit, 
+        // the user object will erase its auth
+        
         // create response
         if (snd(clientSocket, eResult) < 0)
         {
@@ -123,159 +121,148 @@ void Server::handleClient(SOCKET clientSocket)
     }
     ///*std::*/cerr << "Connection ended.\n";
     closesocket(clientSocket);
-    delete[] user;
+    delete user;
 }
 
 void Server::build()
 {
-    try
-    {
+
+        // 1. Creating listen socket
+        // 2. Binding the socket to the address specified
+        // 3. Listening for new connections
+        // Taken from Microsoft tutorial
+        // 
         // Create server socket
         if ((listenSocket = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET)
-            throw 1;
+            cerr << EXCEPTION_CODES[4];
         // Bind socket
         if (bind(listenSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR)
-            throw 2;
-        // Listen for connections
+            cerr << EXCEPTION_CODES[5];
+        // Listen for connections - length of queue is Maximum
         if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
-            throw 3;
-    }
-    catch (int errorCode)
-    {
-        exit(errorCode);
+            cerr << EXCEPTION_CODES[6];
 
-    }
-    /*std::*/cerr << "Built succesfully\n";
+    cerr << "Built succesfully\n";
 }
 
 void Server::run()
 {
-    printf("Server::run\n");
+    cerr << "Server::run\n";
     SOCKET clientSocket;
     // Creating server socket, binding to ip and listening.
     
-    build();
-   // /*std::*/cout << "Server is up and running!\n";
 
+    build();
+
+    cerr << "Server is up and running\n";
     while (true)
     {
-        clientSocket = acceptClient();
 
-        //cerr << "Client accepted.\n";
+            clientSocket = acceptClient();
+            if (clientSocket == INVALID_SOCKET)
+            {
+                cerr << "Cant accept client" << "\n";
+                continue; // Cannot go on to handle client.
+            }
 
-        handleClient(clientSocket);
-        //thread t(handleClient, clientSocket);
-        //t.detach();
+
+        //handleClient(clientSocket);
+        // Creating a thread for the client and detaching it-
+        // NOT waiting for it to end.
+        thread clientThread(&Server::handleClient, this, clientSocket);
+        clientThread.detach();
     }
     closesocket(clientSocket);
 }
 
 
-int Server::receive(SOCKET clientSocket, main_msg &msg)
+int Server::receive(SOCKET clientSocket, MainMsg &msg)
 {
-    printf("Server::receive\n");
+    // Count number of bytes received
     int iResult = 0;
-    memset(&msg, 0, sizeof(main_msg));
+    // Initiating all memory to 0
+    cleanMsg(msg);
     char *buffer = new char[HEADER_STRING_SIZE + 1];
     memset(buffer, 0, HEADER_STRING_SIZE + 1);
+
+    // Receiving the header which has a constant size. Contains- size of data, type of action, authenticatoin.
     iResult = recv(clientSocket, buffer, HEADER_STRING_SIZE, 0);
+    if (iResult != HEADER_STRING_SIZE)
+    {
+        cerr << EXCEPTION_CODES[7];
+        exit(7);
+    }
     buffer[HEADER_STRING_SIZE] = '\0';
-    if (iResult < 0)
-        return iResult;
+    string decryptedBuffer(buffer, HEADER_STRING_SIZE);
+    //decrypt(decryptedBuffer);
+    MessageHeader decodedHeader;
 
-    //decrypt(buffer);
-    //printf("\n\n\n\nServer::receive %d", cnt);
-    MessageHeader header;
-    memset(&header, 0, sizeof(MessageHeader));
-    header = decodeHeader(buffer);
+    decodedHeader = decodeHeader(decryptedBuffer);
 
-    buffer = new char[header.size + 1];
+    buffer = new char[decodedHeader.size + 1];
     iResult = 0;
-    memset(buffer, 0, header.size + 1);
-    try {
-        for (int i = 0; i < header.size / 4096; i++)
-        {
-            iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
-        }
-        iResult += recv(clientSocket, &buffer[iResult], header.size - iResult, 0);
-        if (iResult != header.size)
-            throw 4;
-    }
-    catch (...)
+    memset(buffer, 0, decodedHeader.size + 1);
+
+    // Receiving data in chunks of 4096 bytes (4 kb)
+    // To avoid data loss.
+    for (int i = 0; i < decodedHeader.size / 4096; i++)
+        iResult += recv(clientSocket, &buffer[iResult], 4096, 0);
+    // The last part of the data. (For example if the size is 4097, it will be 1).
+    iResult += recv(clientSocket, &buffer[iResult], decodedHeader.size - iResult, 0);
+    // If number of bytes received is not equal the size specified in the decodedHeader
+
+    if (iResult != decodedHeader.size)
     {
-        printf("Error");
+        cerr << EXCEPTION_CODES[7];
+        exit(7);
     }
 
-    
-    
-    //int iter = 0;
-    /*while (iResult != header.size)
-    {
-        iter++;
-        cerr << "Server::receive---Bytes missing";
-        iResult += recv(clientSocket, &buffer[iResult], header.size, 0);
-        if (iter == 5)
-        {
-            cerr << "problem receiving data in Server::receive";
-            exit(1);
-        }
-    }*/
-    //cerr << strlen(buffer);
-    /*if (msg.header.type == Upload)
-    {
-        int realSize = stoi(msg.data.substr(0, 9));
-        msg.data = string(buffer, realSize);
-        buffer[realSize]
-    }*/
-    buffer[header.size] = '\0';
-    //decrypt(buffer);
-    //cerr << (string)buffer;
-    //msg.data = (string)buffer;
-    memset(&msg.data, 0, sizeof(string));
-    msg.data = string(buffer, header.size);
-    //cerr << "msg.data.size() received: " << msg.data.size() << "\n";
-    //cerr << "bytes received: " << iResult << ".\nsize of data: " << msg.data.size();
-    msg.header = copyHeader(header);
-    
-    //cerr << "\nreceived: " << iResult << " bytes\n";
+    buffer[decodedHeader.size] = '\0';
+    string data(buffer, decodedHeader.size);
+    //decrypt(data);
+
+    msg.data = string(data);
+    msg.header = copyHeader(decodedHeader);
+    cerr << data;
+
+    cerr << (string)data;
+    printf("\n%s", buffer);
     delete[] buffer;
-    return iResult;
 }
 
 
-int Server::snd(SOCKET clientSocket, main_msg &msg)
+int Server::snd(SOCKET clientSocket, MainMsg &msg)
 {
-    int iSendResult;
-    string result = encode(msg);
-    //size_t mSize = strlen(result.c_str()); // Message size
+    // Counts the bytes sent.
+    int iSendResult = 0;
+    string encodedMsg;
 
-    //printf("\nClient::snd- \nsize of message: %zu\nauth: %s\ndata: %s\n\n", msg.header.size,
-        //msg.header.auth, msg.data.c_str());
-    //encrypt(strMsg);
-    if (result.size() != msg.header.size + 18)
-        printf("Server::snd\n");
-    iSendResult = send(clientSocket, result.data(), result.size(), 0);
-    if (iSendResult != result.size())
-        printf("Server::snd2\n");
-    cerr << "Sent " << iSendResult << " bytes\n";
+    // Transforming the struct MainMsg to a string.
+    encodedMsg = encode(msg);
+    //encrypt(encodedMsg);
+    // Sending the data as char array (.data()).
+    iSendResult = send(clientSocket, encodedMsg.data(), encodedMsg.size(), 0);
+    // If the number of bytes sent is not equal to the size of the 
+    // encoded message cerr << EXCEPTION_CODES[an error.
+    if (iSendResult != encodedMsg.size())
+        cerr << EXCEPTION_CODES[8];
     return iSendResult;
 }
 
 
-void Server::encrypt(char *buffer)
+void Server::encrypt(string &buffer)
 {
-    for (int i = 0; i < strlen(buffer); i++)
+    for (int i = 0; i < buffer.size(); i++)
     {
-        buffer[i] = ~buffer[i] ^ 1;
+        buffer[i] = ~buffer[i];
     }
 }
 
 
-void Server::decrypt(char *buffer)
+void Server::decrypt(string &buffer)
 {
-    for (int i = 0; i < strlen(buffer); i++)
+    for (int i = 0; i < buffer.size(); i++)
     {
         buffer[i] = ~buffer[i];
     }
-    string err = buffer;
 }

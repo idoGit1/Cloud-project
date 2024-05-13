@@ -5,13 +5,13 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdlib.h>
-#ifndef COMMON_H_
-#include "common.h"
+#include <mutex>
+#ifndef MY_PROJECT_HEADER_H_
+#include <d:/Cloud project/Header/my_project_header.h>
 #endif
 #ifndef UM_H_
 #include "um.h"
 #endif
-
 #ifndef MESSAGE_H_
 #include "message.h"
 #endif
@@ -20,13 +20,13 @@
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
+
 class Server
 {
 private:
 	WSADATA wsaData;
-	SOCKET listenSocket;
 	struct sockaddr_in serverAddress;
-	//vector<string>dataChunks;
+	SOCKET listenSocket;
 public:
 	Server();
 
@@ -37,19 +37,17 @@ public:
 	SOCKET acceptClient();
 	void handleClient(SOCKET);
 
-	void encrypt(char *);
-	void decrypt(char *);
+	void encrypt(string &);
+	void decrypt(string &);
 
-	//char *encode(Message *);
-	//Message *decode(char *);
-	string encode(main_msg);
-	MessageHeader decodeHeader(char *);
-	//main_msg decode(char *);
+	string encode(MainMsg);
+	MessageHeader decodeHeader(string &);
+	//MainMsg decode(char *);
 
-	int snd(SOCKET, main_msg &);
-	int receive(SOCKET, main_msg &);
+	int snd(SOCKET, MainMsg &);
+	int receive(SOCKET, MainMsg &);
 
-	//int receiveFile(SOCKET, main_msg &);
+	//int receiveFile(SOCKET, MainMsg &);
 
 	void run();
 
