@@ -1,12 +1,10 @@
 #pragma once
+#ifndef CLIENT_H_
 #define WIN32_LEAN_AND_MEAN
 #define CLIENT_H_
-#ifndef MY_PROJECT_HEADER_H_
-#include <d:/Cloud project/Header/my_project_header.h>
-#endif
-#ifndef MESSAGE_H_
+
+#include "my_project_header.h"
 #include "Message.h"
-#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,23 +16,28 @@
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
+
 class Client
 {
 	WSADATA wsaData;
 	struct sockaddr_in serverAddress;
 	SOCKET clientSocket;
 public:
+	static IpType ipType;
+
+	void build(const std::string &);
 	Client();
 	~Client();
-	void encrypt(string &);
-	void decrypt(string &);
+	void encrypt(std::string &);
+	void decrypt(std::string &);
 
-	string encode(MainMsg &);
-	MessageHeader decodeHeader(string &);
+	std::string encode(MainMsg &);
+	MessageHeader decodeHeader(std::string &);
 	//MainMsg decode(char *);
 
-	//int sendFile(MainMsg, vector<string> &);
+	//int sendFile(MainMsg, vector<std::string> &);
 	void snd(MainMsg &);
 	void receive(MainMsg &);
 };
 
+#endif

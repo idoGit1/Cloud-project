@@ -1,18 +1,28 @@
 #pragma once
+#ifndef USER_H_
 #define USER_H_
-#ifndef MY_PROJECT_HEADER_H_
-#include <d:/Cloud project/Header/my_project_header.h>
-#endif
-class User
+#include "my_project_header.h"
+
+
+struct User
 {
-public:
-	string username;
-	string password;
+	std::string username;
+	std::string password;
 
-	bool operator==(User const &);
+	bool operator==(User const &) const;
 	User();
+	explicit User(const std::string username, const std::string password);
+	User(const User &);
 
-	User(User &);
+	std::string toString() const;
 
-	string toString();
+	bool operator <(const User &obj) const noexcept
+	{
+		return (username.compare(obj.username) < 0) ? false : true;
+	}
+
 };
+
+const User ADMIN("admin", "idofinkel112358");
+
+#endif
