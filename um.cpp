@@ -1,144 +1,105 @@
 #include "um.h"
 
-static mutex signupMtx;
-static mutex loginMtx;
-static vector<User> activeUsers;
-static string SQLPassword;
+std::vector<User> UM::activeUsers;
 
-int callback(void *data, int argc, char **argv, char **azColName)
-{
-	int i;
-	//fprintf(stderr, "%s: ", (const char *)data);
-
-	for (i = 0; i < argc; i++) {
-		printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-		printf("Col name: %s\n", azColName[i]);
-		printf("got into callback()\n");
-		SQLPassword = (string)argv[i];
-	}
-
-	printf("\n");
-	return 0;
-}
-
-void UM::createDatabase()
-{
-	sqlite3 *db;
-	string query;
-
-	char *errMsg;
-	int exitResult;
-	try
-	{
-		exitResult = sqlite3_open(DATABASE_FILE, &db);
-		if (exitResult == SQLITE_OK)
-			cerr << "Database (user list) created successfully!\n";
-		else
-			cerr << EXCEPTION_CODES[17];
-	}
-	catch (int errorCode)
-	{
-		cerr << EXCEPTION_CODES[errorCode];
-		exit(errorCode);
-	}
-	// SQL query to create table where username and password are required. 
-	// In addition, username is PRIMARY KEY, which means that it is unique.
-	query = "CREATE TABLE list("
-		"username TEXT PRIMARY KEY,"
-		"password TEXT);";
-	try
-	{
-		exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
-
-		if (exitResult == SQLITE_OK)
-			cerr << "Users table created successfully!\n";
-		else
-		{
-			cerr << EXCEPTION_CODES[18];
-		}
-	}
-	catch (int errorCode)
-	{
-		cerr << EXCEPTION_CODES[errorCode] << "\n";
-		exit(errorCode);
-	}
-	
-}
 
 UM::UM()
 {
 	authentication = BLANKAUTH;
+	activeUsers.resize(0);
 }
 
 
-MainMsg UM::success(Operation type)
+MainMsg UM::success(Operation type, std::string data = "")
 {
-	MainMsg success;
-
-	success.header.type = type;
-	strncpy_s(success.header.auth, 9, authentication.c_str(), 8);
-	success.header.auth[8] = '\0';
-	success.data = (string)SUCCESS;
-	success.header.size = 1;
-	return success;
+	return MainMsg(type, authentication.c_str(), true, data);
 }
-MainMsg UM::failure(Operation type)
+MainMsg UM::failure(Operation type, std::string data = "")
 {
-	MainMsg failure;
-
-	failure.header.type = type;
-	strncpy_s(failure.header.auth, 9, authentication.c_str(), 8);
-	failure.header.auth[8] = '\0';
-	failure.data = (string)FAILURE;
-	failure.header.size = 1;
-
-	return failure;
+	return MainMsg(type, authentication.c_str(), false, data);
 }
 
 
 MainMsg UM::execute(MainMsg msg)
 {
 	MainMsg result;
-		
-
+	Operation current = msg.header.type;
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
-		cerr << EXCEPTION_CODES[19];
-	cerr << authentication << "\n";
-	switch (msg.header.type)
+		throw CommunicationError("Wrong authentication code",
+			MY_LOCATION);
+	try
 	{
-	case Quit:
-		result = quit(msg);
-		break;
-	case Signup:
-		result = signup(msg);
-		break;
-	case Login:
-		result = login(msg);
-		break;
-	case Download:
-		result = download(msg);
-		break;
-	case Upload:
-		result = upload(msg);
-		break;
-	case Share:
-		result = share(msg);
-		break;
-	case Status:
-		result = status(msg);
-		break;
-	case Remove:
-		result = remove_(msg);
-		break;
-	case Exit:
-		exit_(msg);
-		break;
-	default:
-		cerr << EXCEPTION_CODES[16];
-		break;
+		switch (msg.header.type)
+		{
+		case RemoveUser:
+			result = removeUser(msg);
+			break;
+		case Quit:
+			result = quit(msg);
+			break;
+		case Signup:
+			result = signup(msg);
+			break;
+		case Login:
+			result = login(msg);
+			break;
+		case Download:
+			result = download(msg);
+			break;
+		case Upload:
+			result = upload(msg);
+			break;
+		case Share:
+			result = share(msg);
+			break;
+		case Status:
+			result = status(msg);
+			break;
+		case Remove:
+			result = remove_(msg);
+			break;
+		default:
+			throw ContentError("Unknown command", MY_LOCATION);
+			break;
+		}
+	}
+	catch (CommunicationError &ex)
+	{
+		result = MainMsg(current, authentication.c_str(), false, ex.what());
+	}
+	catch (SqlError &ex)
+	{
+		result = MainMsg(current, authentication.c_str(), false, ex.what());
+
+	}
+	catch (ContentError &ex)
+	{
+		result = MainMsg(current, authentication.c_str(), false, ex.what());
+	}
+	catch (FileHandlingError &ex)
+	{
+		result = MainMsg(current, authentication.c_str(), false, ex.what());
 	}
 	return result;
 }
+
+
+
+MainMsg UM::removeUser(MainMsg &msg)
+{
+	if (currentUser != ADMIN)
+		throw ContentError("User doesn't have permission do commit this action", MY_LOCATION);
+
+	using std::string;
+
+	string username = msg.data;
+
+	dataManager.removeUser(username);
+	dataManager.deleteFolder(username);
+	
+	return MainMsg(RemoveUser, authentication.c_str(), true, "");
+}
+
 
 
 void UM::exit_(MainMsg &msg)
@@ -147,18 +108,22 @@ void UM::exit_(MainMsg &msg)
 }
 
 
+
+
 MainMsg UM::quit(MainMsg &msg)
 {
 	// Erase the user from active users.
-	vector<User>::iterator i = find(activeUsers.begin(), activeUsers.end(), currentUser);
+	std::vector<User>::iterator i = find(activeUsers.begin(), activeUsers.end(), currentUser);
 	activeUsers.erase(i);
 	currentUser = User();
-	authentication = (string)BLANKAUTH;
+	authentication = BLANKAUTH;
 	return success(msg.header.type);
 }
 
 MainMsg UM::signup(MainMsg &msg)
 {
+	using std::string;
+
 	string strMsg = msg.data; // Format: [username password]
 
 	size_t spaceIdx = strMsg.find(" ");
@@ -166,107 +131,47 @@ MainMsg UM::signup(MainMsg &msg)
 	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
-	
-	sqlite3 *db;
-	char *errMsg;
 	int exitResult;
-	string query;
+	char *errMsg;
+	User user;
+	user.username = username;
+	user.password = password;
 
-	signupMtx.lock();
-	exitResult = sqlite3_open(DATABASE_FILE, &db);
+	dataManager.updateUsersTable(user); 
+	dataManager.createUserFolder(user);
+	dataManager.createSharingDBTable(user); 
+	dataManager.createSharedWithMeFolder(user);
 
-	if (exitResult != SQLITE_OK)
-	{
-		cerr << "problem inside signup func.\n";
-		exit(1);
-	}
-	query = "INSERT INTO " + (string)TABLE + 
-		" VALUES('" + username + "', '" + password +
-		"');";
-	cerr << "Query: " << query;
-
-	exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);
-	signupMtx.unlock();
-
-	if (exitResult == SQLITE_OK)
-	{
-		fs::path folderPath = ((string)DATA_PATH + username);
-		if (fs::exists(folderPath))
-		{
-			cerr << "UM::singup- folder exists.";
-			exit(1);
-		}
-		else
-		{
-			if (fs::create_directory(folderPath))
-			{
-				cerr << "Folder for user " << username << " created successfully.";
-				
-				fs::path shareFolderPath = (DATA_PATH + username + "\\.shared");
-				
-				if (!fs::create_directory(shareFolderPath))
-				{
-					cerr << "UM::signup cannot open share folder\n";
-					exit(85);
-				}
-			}
-			else
-			{
-				cerr << "UM::signup- Folder for " << username << " failed to create.";
-				exit(1);
-			}
-		}
-		return success(msg.header.type);
-	}
-	else
-	{
-		cerr << errMsg << "\n";
-		return failure(msg.header.type);// Otherwise return Message that username is not unique and needs to be replaced.
-
-	}
+	return success(msg.header.type);
 }
 
 MainMsg UM::login(MainMsg &msg)
 {
+	using std::string;
+
 	User user1;
 	string strMsg = msg.data; // Format: [username password]
 
 	size_t spaceIdx = strMsg.find(" ");
-	//int endUsernameIdx = spaceIdx;
 
 	string username = strMsg.substr(0, spaceIdx);
 	string password = strMsg.substr(spaceIdx + 1, strMsg.length());
 
 	user1.username = username;
 	user1.password = password;
+	// Check if user is currently active.
 
 	if (find(activeUsers.begin(), activeUsers.end(), user1) != activeUsers.end())
+		throw CommunicationError("User is already active", MY_LOCATION);
+
+	if (user1 == ADMIN)
 	{
-		// Need to cerr << EXCEPTION_CODES[an error code.
-		return failure(msg.header.type);
+		activeUsers.push_back(ADMIN);
+		currentUser = ADMIN;
+		authentication = generateAuthentication();
+		return success(Login, authentication);
 	}
-
-	sqlite3 *db;
-	char *errMsg;
-	int exitResult;
-	string query;
-	// Protecting file accessing.
-	loginMtx.lock();
-
-		exitResult = sqlite3_open(DATABASE_FILE, &db);
-		if (exitResult != SQLITE_OK)
-			cerr << EXCEPTION_CODES[20];
-
-	query = "SELECT password FROM " + (string)TABLE +
-		" WHERE username = '" + user1.username + "';";
-
-		exitResult = sqlite3_exec(db, query.c_str(), callback, 0, &errMsg);
-		loginMtx.unlock();
-		if (exitResult != SQLITE_OK)
-			cerr << EXCEPTION_CODES[21];
-
-
-	if (user1.password == SQLPassword)
+	else if (dataManager.isPasswordCorrect(user1))
 	{
 		currentUser = User(user1);
 		// Protecting double accessing from different devices to the same user.
@@ -274,92 +179,59 @@ MainMsg UM::login(MainMsg &msg)
 
 		authentication = generateAuthentication();
 
-		MainMsg respond;
-
-		respond.data = (string)SUCCESS;
-		respond.header.type = Login;
-		strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
-		respond.header.auth[8] = '\0';
-		respond.header.size = (respond.data).size();
-		return respond;
+		return success(Login, authentication);
 	}
-	return failure(Login); // Password incorrect
+	throw CommunicationError("Incorrect password", MY_LOCATION); // Password incorrect
 	
 }
 
 MainMsg UM::download(MainMsg &msg)
 {
-
-	MainMsg result;
-
-	string inputFilePath = (string)DATA_PATH + currentUser.username
-		+ "\\" + msg.data; // "D:\\Cloud project\\Cloud\\Data\\'username'\\filename"
-
-	ifstream file;
-	file.open(inputFilePath, ios::binary);
+	std::string fileName;
+	std::string fileContent;
 	
-	if (!file.is_open())
-	{
-		return failure(msg.header.type);
-	}
-
-	string fileContent(istreambuf_iterator<char>(file), {});
-
-	file.close();
-
-	result.header.type = Download;
-	strncpy_s(result.header.auth, 9, authentication.c_str(), 8);
-	result.header.auth[8] = '\0';
-
-	result.data = msg.data + "*";
-	result.data += fileContent;
-
-	result.header.size = result.data.size();
+	fileContent = dataManager.downloadFile(msg.data, currentUser.username);
 	
-	return result;
+	if (msg.data[0] == '.')
+		fileName = msg.data.substr(1, msg.data.size() - 1);
+	else
+		fileName = msg.data;
+
+	return MainMsg(Download, authentication.c_str(), true, fileName + "*" + fileContent);
+	
 }
 
 MainMsg UM::upload(MainMsg &msg)
 {
 	printf("UM::upload\n");
 	size_t starPos = msg.data.find("*");
-	string outFileName = msg.data.substr(0, starPos);
-	string fileContent = msg.data.substr(starPos + 1, msg.data.size() - starPos);
+	std::string outFileName = msg.data.substr(0, starPos);
+	std::string fileContent = msg.data.substr(starPos + 1, msg.data.size() - starPos);
 	// Need to check if file is already exist.
-	ofstream outFile(((string)DATA_PATH + currentUser.username + "\\" + outFileName), ios::binary);
-	cerr << ((string)DATA_PATH + outFileName);
-	// Need to check if worked.
+
+	// TO DO: write dataManager.uploadFile();
+
+	std::ofstream outFile((DataManager::DATA_PATH + currentUser.username + "\\" + outFileName)
+		, std::ios::binary);
 	if (outFile)
 	{
 		outFile.write(fileContent.data(), fileContent.size());
-		//outFile << fileContent;
 		outFile.close();
 		return success(msg.header.type);
 	}
-	return failure(msg.header.type);
+	throw FileHandlingError("Cannot open file", MY_LOCATION);
 }
 
 MainMsg UM::share(MainMsg &msg)
 {
+	using namespace std;
+
 	size_t starIdx = msg.data.find("*");
 	
 	string sharedUsername = msg.data.substr(0, starIdx);
 	string fileName = msg.data.substr(starIdx + 1, msg.data.size() - starIdx - 1);
 
-	string destUserPath = DATA_PATH + sharedUsername + "\\.shared\\" + fileName;
-	string srcUserPath = DATA_PATH + currentUser.username + "\\" + currentUser.username + "_" + fileName;
-
-	// TO DO:
-	// Add in the sqlite db of the sharing user
-
-	ifstream src(srcUserPath, ios::binary);
-	ofstream dest(destUserPath, ios::binary);
-
-	// Taken from stack overflow:
-
-	copy(istreambuf_iterator<char>(src),
-		istreambuf_iterator<char>(),
-		ostreambuf_iterator<char>(dest));
+	dataManager.shareFile(sharedUsername, currentUser, fileName);
 
 	return success(msg.header.type);
 
@@ -367,70 +239,49 @@ MainMsg UM::share(MainMsg &msg)
 
 MainMsg UM::status(MainMsg &msg)
 {
-	printf("UM::status\n");
-	MainMsg respond;
+	using namespace std;
 
-	string path = (string)DATA_PATH + currentUser.username; // The directory with the user's files.
-	string data = "";
-	fs::path fileName;
-	string fileNameStr;
-	bool hasFiles = false;
-	for (const fs::directory_entry &entry : fs::directory_iterator(path))
+	if (currentUser == ADMIN)
 	{
-		hasFiles = true;
-		fileName = entry.path();
-		fileNameStr = fileName.string();
-
-		// Remove the starting - D:\\Cloud project...
-
-		size_t perffixLen = (path + "\\").size();
-		data += "\t";
-		data += fileNameStr.substr(perffixLen, fileNameStr.size() - perffixLen);
-		data += "\n";
-	}
-
-	if (!hasFiles)
-	{
-		respond.header.type = Status;
-		strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
-		respond.header.auth[8] = '\0';
-
-		respond.data = (string)SUCCESS;
-
-		respond.header.size = 1;
+		MainMsg respond(Status, authentication.c_str(),
+			true, dataManager.registeredUsersList());
 		return respond;
 	}
 
-	respond.header.type = Status;
-	strncpy_s(respond.header.auth, 9, authentication.c_str(), 8);
-	respond.header.auth[8] = '\0';
+	string path = DataManager::DATA_PATH + currentUser.username; // The directory with the user's files.
+	string data = "";
+	string sharedWithMePath = path + "\\.shared";
+	
+	data = dataManager.getFilesInFolder(path);
+	data += "\nSHARED WITH ME:\n";
+	data += dataManager.getFilesInFolder(sharedWithMePath);
+	data += "\n\nSHARING WITH OTHERS:\n";
+	data += dataManager.mySharingList(currentUser.username);
 
-	respond.data = (string)data;
-
-	respond.header.size = respond.data.size();
-
-	return respond;
+	return MainMsg(Status, authentication.c_str(), true, data);
 }
 
 MainMsg UM::remove_(MainMsg &msg)
 {
-	MainMsg respond;
-
-	string path = (string)DATA_PATH + currentUser.username; // The directory with the user's files.
-	string fileName = (string)msg.data;
+	std::string path = DataManager::DATA_PATH + currentUser.username; // The directory with the user's files.
+	std::string fileName = msg.data;
 	path += "\\" + fileName;
 	if (remove(path.c_str()) == 0)
 		return success(msg.header.type);
 	else
-		return failure(msg.header.type);
+	{
+		std::string msgErr;
+		msgErr = std::format("Cannot remove the file: {}.", fileName);
+		throw FileHandlingError(msgErr.c_str(), MY_LOCATION);
+	}
 }
 
 
 
-string UM::generateAuthentication()
+std::string UM::generateAuthentication()
 {
 	// Taken from geeksforgeeks.
-	mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+	std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
 
 	static const char alphaNum[] =
 		"0123456789"
@@ -444,5 +295,3 @@ string UM::generateAuthentication()
 	}
 	return auth;
 }
-
-

@@ -1,4 +1,5 @@
 #pragma once
+#ifndef SERVER_H_
 #define WIN32_LEAN_AND_MEAN
 #define SERVER_H_
 #include <windows.h>
@@ -6,15 +7,10 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <mutex>
-#ifndef MY_PROJECT_HEADER_H_
-#include <d:/Cloud project/Header/my_project_header.h>
-#endif
-#ifndef UM_H_
+
+#include "my_project_header.h"
 #include "um.h"
-#endif
-#ifndef MESSAGE_H_
 #include "message.h"
-#endif
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
@@ -27,9 +23,10 @@ private:
 	WSADATA wsaData;
 	struct sockaddr_in serverAddress;
 	SOCKET listenSocket;
+
+	bool isSocketActive(SOCKET sock);
 public:
 	Server();
-
 	~Server();
 
 	void build();
@@ -37,11 +34,11 @@ public:
 	SOCKET acceptClient();
 	void handleClient(SOCKET);
 
-	void encrypt(string &);
-	void decrypt(string &);
+	void encrypt(std::string &);
+	void decrypt(std::string &);
 
-	string encode(MainMsg);
-	MessageHeader decodeHeader(string &);
+	std::string encode(MainMsg);
+	MessageHeader decodeHeader(std::string &);
 	//MainMsg decode(char *);
 
 	int snd(SOCKET, MainMsg &);
@@ -53,3 +50,4 @@ public:
 
 };
 
+#endif

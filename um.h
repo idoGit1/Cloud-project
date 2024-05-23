@@ -1,17 +1,13 @@
 #pragma once
+#ifndef UM_H_
 #define UM_H_
-#define DATABASE_FILE "D:\\Cloud project\\Cloud\\Data\\user_list.db\0"
-#define DATA_PATH "D:\\Cloud project\\Cloud\\Data\\"
+//#define DataManagerBASE_FILE "D:\\Cloud project\\Cloud\\DataManager\\user_list.db\0"
+//#define DataManager_PATH "D:\\Cloud project\\Cloud\\DataManager\\"
 #define TABLE "list"
-#ifndef MY_PROJECT_HEADER_H_
-#include <d:/Cloud project/Header/my_project_header.h>
-#endif
-#ifndef MESSAGE_H_
+#include "my_project_header.h"
 #include "message.h"
-#endif
-#ifndef USER_H_
 #include "user.h"
-#endif
+#include "data_manager.h"
 
 #include <winsqlite/winsqlite3.h>
 #include <random>
@@ -24,12 +20,24 @@
 #include <stdio.h>
 namespace fs = std::filesystem;
 
+
+
+
 class UM
 {
 private:
+	//static std::mutex signupMtx;
+	//static std::mutex loginMtx;
+	static std::vector<User> activeUsers;
+	DataManager dataManager;
 	User currentUser;
-	string authentication;
-
+	std::string authentication;
+	// File system and sql.
+	//void createUserFolder(const User &);
+	///void createSharedWithMeFolder(const User &);
+	//void createSharingDBTable(const User &);
+	//void updateUsersTable(const User &);
+	//bool isPasswordCorrect(const User &);
 
 	MainMsg quit(MainMsg &);
 	MainMsg signup(MainMsg &);
@@ -39,19 +47,26 @@ private:
 	MainMsg share(MainMsg &);
 	MainMsg status(MainMsg &);
 	MainMsg remove_(MainMsg &);
+	MainMsg removeUser(MainMsg &);
 	void exit_(MainMsg &);
-	static string generateAuthentication();
+	static std::string generateAuthentication();
+	//std::string getFilesInFolder(std::string &); // without files that begin with a '.
 
-
-	MainMsg null();
+	//MainMsg null();
 	// Handle sqlite
 
 	//static int callback(void *, int, char **, char **);
+
+
+
+
 public:
 	static void createDatabase(); // Runs only ONCE.
 
 	UM();
 	MainMsg execute(MainMsg);
-	MainMsg success(Operation);
-	MainMsg failure(Operation);
+	MainMsg success(Operation, std::string);
+	MainMsg failure(Operation, std::string);
 };
+
+#endif

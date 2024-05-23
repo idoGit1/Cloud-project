@@ -10,10 +10,20 @@
 
 int main(int argc, char **argv)
 {
-	//UM::createDatabase(); // ONLY ONCE, WITH FIRST RUN.
-
-	Server server = Server();
-	server.run();
-	cin.get();
+	//Data::createDatabase(); // ONLY ONCE, WITH FIRST RUN.
+	try
+	{
+		Server server = Server();
+		server.run();
+		std::cin.get();
+	}
+	catch (CommunicationError &ex)
+	{
+		std::cerr << ex.what();
+	}
+	catch (SqlError &ex)
+	{
+		std::cerr << ex.what();
+	}
 	return 0;
 }
