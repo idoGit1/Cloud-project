@@ -1,15 +1,10 @@
 #include "ui.h"
-
+#include <iostream>
 int main(int argc, char **argv)
 {
-
 	UI ui = UI();
-	if (argc == 1)
-		ui.run();
-	else if (argv[1] == "local_host")
-		ui.run();
-	else if (argv[1] == "extern")
-		ui.run(EXTERN_IP);
+	
+	ui.run();
 
 	return 0;
 }

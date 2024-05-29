@@ -1,29 +1,14 @@
 #include "ui.h"
 
 
-namespace stringFuncs
-{
-	void removeStartSpaces(std::string &str)
-	{
-		int idx = 0;
-		for (idx; idx < str.size(); idx++)
-		{
-			if (str[idx] == ' ')
-				continue;
-			else
-				break;
-		}
-		str = str.substr(idx, str.size() - idx);
-	}
-}
-
-
 
 UI::UI()
 {
+	loginAttemptsCounter = 0;
+	signupsCounter = 0;
 	authentication = BLANKAUTH;
 	//currentUser = User();
-	client = Client();
+	//client = Client();
 }
 
 UI::~UI()
@@ -33,13 +18,22 @@ UI::~UI()
 
 
 
-void UI::run(const std::string &ip)
+void UI::run()
 {
 	using namespace std;
-	
+	std::string ip;
+	/*printf("Type the number of the type:\n1. Local host\n2. External device\n");
+	int ans;
+	cin >> ans;
+	if (ans == 1)
+		ip = IP;
+	else if (ans == 2)
+		ip = EXTERN_IP;
+	else
+		printf("Unknown. Program is terminated.");*/
 	try
 	{
-		client.build(ip);;
+		client.build(EXTERN_IP);;
 	}
 	catch (...)
 	{
@@ -64,7 +58,7 @@ void UI::run(const std::string &ip)
 		//printf("\n");
 		if (op == "")
 			getline(cin, op);
-		stringFuncs::removeStartSpaces(op);
+		Local::removeStartEndSpaces(op);
 		size_t spaceIdx = op.find(" ");
 
 		try
@@ -75,6 +69,11 @@ void UI::run(const std::string &ip)
 			}
 			else if (op == "login" && spaceIdx == string::npos)
 			{
+				if (loginAttemptsCounter == 5)
+				{
+					printf("(cloud) Too many failed logins, program is terminated...");
+					return;
+				}
 				if (authentication != BLANKAUTH)
 				{
 					printf("(cloud) To login to another use, first quit this user.");
@@ -84,6 +83,23 @@ void UI::run(const std::string &ip)
 			}
 			else if (op == "signup" && spaceIdx == string::npos)
 			{
+				static std::chrono::steady_clock::time_point startTime;
+				static std::chrono::steady_clock::time_point endTime;
+				if (signupsCounter == 0)
+					startTime = std::chrono::high_resolution_clock::now();
+				if (signupsCounter == 5)
+				{
+					endTime = std::chrono::high_resolution_clock::now();
+
+					std::chrono::seconds duration = 
+						std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime);
+
+					if (duration <= std::chrono::seconds(10))
+					{
+						printf("(cloud) Bot detected. Terminating program...");
+						return;
+					}
+				}
 				if (authentication != BLANKAUTH)
 				{
 					printf("(cloud) To create another user, first quit this one");
@@ -102,11 +118,6 @@ void UI::run(const std::string &ip)
 			}
 			else if (op == "exit" && spaceIdx == string::npos)
 			{
-				if (authentication == BLANKAUTH)
-				{
-					printf("(cloud) No user logged in.");
-					continue;
-				}
 				exit_();
 			}
 			else if (op == "status" && spaceIdx == string::npos)
@@ -172,20 +183,20 @@ void UI::run(const std::string &ip)
 		}
 		catch (UserInputError &ex)
 		{
-			printf("(cloud) %s", ex.what());
+			printf("(cloud) %s", ex.whatForUser());
 		}
 		catch (CommunicationError &ex)
 		{
-			cerr << ex.what();
+			cerr << ex.whatForUser();
 			return;
 		}
 		catch (ContentError &ex)
 		{
-			printf("(cloud) %s", ex.what());
+			printf("(cloud) %s", ex.whatForUser());
 		}
 		catch (FileHandlingError &ex)
 		{
-			printf("(cloud) %s", ex.what());
+			printf("(cloud) %s", ex.whatForUser());
 		}
 
 	}
@@ -209,6 +220,12 @@ void UI::login()
 	printf("\n(cloud) Password: ");
 	std::cin >> user.password;
 
+	if (user.username.find("'") != std::string::npos || user.password.find("'") != std::string::npos)
+	{
+		printf("(cloud) Char \"'\" is not allowed.");
+		return;
+	}
+
 	MainMsg msg;
 
 	strncpy_s(msg.header.auth, 9, BLANKAUTH, 8);
@@ -231,7 +248,8 @@ void UI::login()
 	}
 	else
 	{
-		throw UserInputError("Wrong username or password");
+		loginAttemptsCounter++;
+		throw UserInputError(msg.data.c_str());
 	}
 	
 }
@@ -255,7 +273,7 @@ void UI::signup()
 
 	client.snd(msg);
 
-	cleanMsg(msg);
+	msg.clean();
 	client.receive(msg);
 
 	if (msg.header.type == Signup && msg.header.success)
@@ -312,7 +330,7 @@ void UI::quit()
 
 	client.snd(msg);
 
-	cleanMsg(msg);
+	msg.clean();
 
 	client.receive(msg);
 	if (msg.header.type == Quit && msg.header.success)
@@ -329,12 +347,10 @@ void UI::exit_()
 {
 	MainMsg msg;
 
-	msg.header.type = Quit;
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-	msg.data = SUCCESS;
-	msg.header.size = 1;
+	msg = MainMsg(Exit, authentication.c_str(), true, "");
 	client.snd(msg);
+
+	// Let the message to pass safely.
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	exit(0);
 }
@@ -352,7 +368,7 @@ void UI::status()
 
 	client.snd(msg);
 
-	cleanMsg(msg);
+	msg.clean();
 	client.receive(msg);
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code.", MY_LOCATION);
@@ -376,7 +392,7 @@ void UI::download(std::string &op)
 	string inputFileName = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
 	MainMsg msg;
 
-	stringFuncs::removeStartSpaces(inputFileName);
+	Local::removeStartEndSpaces(inputFileName);
 	if (spaceIdx == string::npos || inputFileName == "")
 	{
 		printf("Please specify the name of the file you would"
@@ -390,7 +406,7 @@ void UI::download(std::string &op)
 	msg.header.size = msg.data.size();
 
 	client.snd(msg);
-	cleanMsg(msg);
+	msg.clean();
 	client.receive(msg);
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code.", MY_LOCATION);
@@ -426,7 +442,7 @@ void UI::upload(std::string &op)
 
 
 	string inputFilePath = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
-	stringFuncs::removeStartSpaces(inputFilePath);
+	Local::removeStartEndSpaces(inputFilePath);
 
 	if (spaceIdx == string::npos || inputFilePath == "")
 	{
@@ -490,12 +506,24 @@ void UI::upload(std::string &op)
 
 void UI::share(std::string &op)
 {
+	// Removing unwanted spaces from both edges of the string.
+	Local::removeStartEndSpaces(op);
 
 	size_t lastSpaceIdx = op.find_last_of(" "); // The structure is: share @username@ fileName
 	size_t firstAtIdx = op.find("@");
 	size_t secondAtIdx = op.find_last_of("@");
 	std::string sharedUsername;
 	std::string fileName;
+
+
+	if (firstAtIdx == std::string::npos || firstAtIdx == secondAtIdx ||
+		lastSpaceIdx == std::string::npos
+		|| lastSpaceIdx < secondAtIdx)
+	{
+		printf("(cloud) Unknown form of command. Notice, the form of share command is:\n"
+			"share @<username>@ <file name>");
+		return;
+	}
 
 	fileName = op.substr(lastSpaceIdx + 1, op.size() - lastSpaceIdx - 1);
 	sharedUsername = op.substr(firstAtIdx + 1, secondAtIdx - firstAtIdx - 1);
@@ -520,12 +548,19 @@ void UI::share(std::string &op)
 	if (msg.header.success)
 		printf("(cloud) %s is shared successfully with %s", fileName.c_str(), sharedUsername.c_str());
 	else
-		throw CommunicationError(msg.data.c_str(), MY_LOCATION);
+		throw ContentError(msg.data.c_str(), MY_LOCATION);
 }
 
 void UI::remove(std::string &op)
 {
+	Local::removeStartEndSpaces(op);
 	size_t spaceIdx = op.find(" ");
+
+	if (spaceIdx == std::string::npos)
+	{
+		printf("(cloud) File name is required");
+		return;
+	}
 	std::string inputFileName = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
 
 	MainMsg msg;
@@ -548,5 +583,5 @@ void UI::remove(std::string &op)
 	if (msg.header.success)
 		printf("(cloud) %s removed successfully!", inputFileName.c_str());
 	else
-		throw CommunicationError(msg.data.c_str(), MY_LOCATION);
+		throw ContentError(msg.data.c_str(), MY_LOCATION);
 }

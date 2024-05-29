@@ -2,25 +2,23 @@
 #ifndef UI_H_
 #define UI_H_
 
-#include "my_project_header.h"
+#include "d:/Cloud project/Additional/my_project_header.h"
 #include "client.h"
-#include "message.h"
-#include "user.h"
+#include "d:/Cloud project/Additional/message.h"
+#include "d:/Cloud project/Additional/user.h"
 
 #include <vector>
 #include <string>
-
+#include <chrono>
 
 class UI
 {
 	User currentUser;
 	std::string authentication;
 	Client client;
+	int loginAttemptsCounter; // Against dos attac
+	int signupsCounter;
 	//bool readFile(vector<string> &, string);
-public:
-	UI();
-	~UI();
-
 	void help();
 	void login();
 	void signup();
@@ -32,7 +30,12 @@ public:
 	void share(std::string &);
 	void remove(std::string &);
 	void removeUser(std::string &);
-	void run(const std::string &ip = IP);
+public:
+	UI();
+	~UI();
+
+
+	void run();
 
 };
 

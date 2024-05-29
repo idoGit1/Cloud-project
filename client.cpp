@@ -10,7 +10,7 @@ void Client::build(const std::string &ip)
 
     this->serverAddress.sin_family = AF_INET;
     this->serverAddress.sin_port = htons(PORT);
-    result = inet_pton(AF_INET, ip.c_str()    , &this->serverAddress.sin_addr.s_addr);
+    result = inet_pton(AF_INET, ip.c_str(), &this->serverAddress.sin_addr.s_addr);
 
     if (result <= 0)
         throw CommunicationError("Cannot create server address.", MY_LOCATION);
@@ -25,7 +25,6 @@ void Client::build(const std::string &ip)
 
 Client::Client()
 {
-    int result;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         throw CommunicationError("Cannot init WinSock", MY_LOCATION);
 
@@ -45,9 +44,9 @@ Client::~Client()
 
 }
 
-void Client::snd(MainMsg &msg)
+void Client::snd(const MainMsg &msg)
 {
-    // Counts the bytes sent.
+    /*// Counts the bytes sent.
     int iSendResult = 0;
     std::string encodedMsg = "";
     // Transforming the struct MainMsg to a string.
@@ -63,12 +62,13 @@ void Client::snd(MainMsg &msg)
         msgErr = "Did not send full message. Sent" + std::to_string(iSendResult)
             + "/" + std::to_string(encodedMsg.size()) + " bytes.";
         throw CommunicationError(msgErr.c_str(), MY_LOCATION);
-    }
+    }*/
+    Network::snd(clientSocket, msg);
 }
 
 void Client::receive(MainMsg &msg)
 {
-    // Count number of bytes received
+   /* // Count number of bytes received
     uint64_t iResult = 0;
     // Initiating all memory to 0
     msg = MainMsg();
@@ -125,12 +125,13 @@ void Client::receive(MainMsg &msg)
     msg.data = data;
     msg.header = copyHeader(decodedHeader);
 
-    delete[] buffer;
+    delete[] buffer;*/
+    Network::receive(clientSocket, msg);
 }
 
 
 
-void Client::encrypt(std::string &buffer)
+/*void Client::encrypt(std::string &buffer)
 {
     for (int i = 0; i < buffer.size(); i++)
     {
@@ -185,3 +186,4 @@ MessageHeader Client::decodeHeader(std::string &buffer)
     decodedHeader.success = success == "1" ? true : false;
     return decodedHeader;
 }
+*/
