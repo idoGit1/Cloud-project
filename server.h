@@ -7,42 +7,43 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <mutex>
-
-#include "my_project_header.h"
+#include "clientd_details.h"
+#include "d:/Cloud project/Additional/my_project_header.h"
 #include "um.h"
-#include "message.h"
-
+#include "d:/Cloud project/Additional/message.h"
+#include "d:/Cloud project/Additional/network.h"
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
 
-class Server
+class Server : Network
 {
 private:
 	WSADATA wsaData;
 	struct sockaddr_in serverAddress;
 	SOCKET listenSocket;
 
-	bool isSocketActive(SOCKET sock);
-public:
-	Server();
-	~Server();
-
+	//bool isSocketActive(SOCKET sock);
 	void build();
 
 	SOCKET acceptClient();
-	void handleClient(SOCKET);
+	void handleClient(ClientDetails *);
+public:
+	//static std::vector<ClientDetails *> activeClients;
+	Server();
+	~Server();
+	
 
-	void encrypt(std::string &);
-	void decrypt(std::string &);
+	//void encrypt(std::string &);
+	//void decrypt(std::string &);
 
-	std::string encode(MainMsg);
-	MessageHeader decodeHeader(std::string &);
+	//std::string encode(MainMsg);
+	//MessageHeader decodeHeader(std::string &);
 	//MainMsg decode(char *);
 
-	int snd(SOCKET, MainMsg &);
-	int receive(SOCKET, MainMsg &);
+	//void snd(SOCKET, MainMsg &);
+	//void receive(SOCKET, MainMsg &);
 
 	//int receiveFile(SOCKET, MainMsg &);
 

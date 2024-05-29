@@ -1,13 +1,13 @@
 #include "um.h"
 
 std::vector<User> UM::activeUsers;
-
+std::mutex UM::activeUsersMtx;
 
 UM::UM()
 {
 	authentication = BLANKAUTH;
-	activeUsers.resize(0);
 }
+
 
 
 MainMsg UM::success(Operation type, std::string data = "")
@@ -22,6 +22,7 @@ MainMsg UM::failure(Operation type, std::string data = "")
 
 MainMsg UM::execute(MainMsg msg)
 {
+	using std::cerr;
 	MainMsg result;
 	Operation current = msg.header.type;
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
@@ -31,6 +32,9 @@ MainMsg UM::execute(MainMsg msg)
 	{
 		switch (msg.header.type)
 		{
+		case Exit:
+			result = exit_(msg);
+			break;
 		case RemoveUser:
 			result = removeUser(msg);
 			break;
@@ -65,20 +69,32 @@ MainMsg UM::execute(MainMsg msg)
 	}
 	catch (CommunicationError &ex)
 	{
-		result = MainMsg(current, authentication.c_str(), false, ex.what());
+		cerr << ex.what();
+		result = MainMsg(current, authentication.c_str(), false, ex.whatForUser());
 	}
 	catch (SqlError &ex)
 	{
-		result = MainMsg(current, authentication.c_str(), false, ex.what());
-
+		cerr << ex.what();
+		result = MainMsg(current, authentication.c_str(), false, ex.whatForUser());
 	}
 	catch (ContentError &ex)
 	{
-		result = MainMsg(current, authentication.c_str(), false, ex.what());
+		cerr << ex.what();
+		result = MainMsg(current, authentication.c_str(), false, ex.whatForUser());
 	}
 	catch (FileHandlingError &ex)
 	{
-		result = MainMsg(current, authentication.c_str(), false, ex.what());
+		cerr << ex.what();
+		result = MainMsg(current, authentication.c_str(), false, ex.whatForUser());
+	}
+	catch (UserInputError &ex)
+	{
+		cerr << ex.what();
+		result = MainMsg(current, authentication.c_str(), false, ex.whatForUser());
+	}
+	catch (...)
+	{
+		cerr << "Unknown error";
 	}
 	return result;
 }
@@ -102,9 +118,11 @@ MainMsg UM::removeUser(MainMsg &msg)
 
 
 
-void UM::exit_(MainMsg &msg)
+MainMsg UM::exit_(MainMsg &msg)
 {
-	exit(0);
+	if (authentication != BLANKAUTH)
+		quit(msg);
+	return MainMsg();
 }
 
 
@@ -113,8 +131,13 @@ void UM::exit_(MainMsg &msg)
 MainMsg UM::quit(MainMsg &msg)
 {
 	// Erase the user from active users.
-	std::vector<User>::iterator i = find(activeUsers.begin(), activeUsers.end(), currentUser);
-	activeUsers.erase(i);
+	activeUsersMtx.lock();
+	//std::vector<User>::iterator i = find(activeUsers.begin(), activeUsers.end(), currentUser);
+	int idx = Local::binarySearchInVector(activeUsers, currentUser);
+	if (idx == -1)
+		throw std::exception("In UM::quit in file um.cpp: cannot find user in activeUsers vector.");
+	activeUsers.erase(activeUsers.begin() + idx);
+	activeUsersMtx.unlock();
 	currentUser = User();
 	authentication = BLANKAUTH;
 	return success(msg.header.type);
@@ -160,13 +183,22 @@ MainMsg UM::login(MainMsg &msg)
 	user1.username = username;
 	user1.password = password;
 	// Check if user is currently active.
-
-	if (find(activeUsers.begin(), activeUsers.end(), user1) != activeUsers.end())
+	activeUsersMtx.lock();
+	if (Local::binarySearchInVector(activeUsers, user1) != -1) // Found user in vector
+	{
+		// User is already active from another client.
+		activeUsersMtx.unlock();
 		throw CommunicationError("User is already active", MY_LOCATION);
+		
+	}
 
 	if (user1 == ADMIN)
 	{
-		activeUsers.push_back(ADMIN);
+		// User is admin
+		//activeUsers.push_back(ADMIN);
+		Local::addToSortedVector(activeUsers, ADMIN);
+		activeUsersMtx.unlock();
+
 		currentUser = ADMIN;
 		authentication = generateAuthentication();
 		return success(Login, authentication);
@@ -175,12 +207,15 @@ MainMsg UM::login(MainMsg &msg)
 	{
 		currentUser = User(user1);
 		// Protecting double accessing from different devices to the same user.
-		activeUsers.push_back(currentUser);
-
+		//activeUsers.push_back(currentUser);
+		Local::addToSortedVector(activeUsers, currentUser);
+		activeUsersMtx.unlock();
 		authentication = generateAuthentication();
 
 		return success(Login, authentication);
 	}
+	// Password is inncorrect
+	activeUsersMtx.unlock();
 	throw CommunicationError("Incorrect password", MY_LOCATION); // Password incorrect
 	
 }
@@ -230,6 +265,9 @@ MainMsg UM::share(MainMsg &msg)
 	
 	string sharedUsername = msg.data.substr(0, starIdx);
 	string fileName = msg.data.substr(starIdx + 1, msg.data.size() - starIdx - 1);
+
+	if (sharedUsername == currentUser.username)
+		throw UserInputError("Cannot share file with yourself");
 
 	dataManager.shareFile(sharedUsername, currentUser, fileName);
 

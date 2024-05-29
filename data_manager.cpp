@@ -1,5 +1,5 @@
 #include "data_manager.h"
-
+#include <filesystem>
 std::mutex DataManager::signupMtx;
 std::mutex DataManager::loginMtx;
 const std::string DataManager::DATA_PATH = "D:\\Cloud project\\Cloud\\Data\\";
@@ -14,6 +14,35 @@ DataManager::DataManager()
 	tmpList.clear();
 }
 
+
+
+std::string DataManager::sha256(const std::string &buffer)
+{
+	// This code is taken from 'Yola' user in stackoverflow.
+	// https://stackoverflow.com/questions/2262386/generate-sha256-with-openssl-and-c
+	// 
+	// Contain the hashed string (up to 32 digits).
+	unsigned char hash[SHA256_DIGEST_LENGTH];
+	// Create hashing object
+	SHA256_CTX sha256;
+	// Initializing
+	SHA256_Init(&sha256);
+	// Updating the object with the buffer (unhashed string)
+	SHA256_Update(&sha256, buffer.c_str(), buffer.size());
+	// Getting the hashed string into hash[]
+	SHA256_Final(hash, &sha256);
+	
+	// Turning it into hexadecimal base and to a string
+	std::stringstream output;
+
+	// std::hex - to write it hexadecimal
+	// std::setw(2) - to write to bytes at atime
+	// std::setfill('0') - to fill the string with zeroes, for example the value is 'A', to make it '0A'.
+	for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+		output << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+
+	return output.str();
+}
 
 
 void DataManager::createDatabase()
@@ -107,7 +136,12 @@ bool DataManager::isPasswordCorrect(const User &user)
 		errMsg = "user_list.db cannot preform the query\n" + query;
 		throw SqlError(errMsg.c_str(), MY_LOCATION);
 	}
-	return user.password == tmpSqlPassword;
+	// Getting hashed password
+	//std::hash<std::string> hashing;
+	//size_t hashedInNumber = hashing(user.password);
+	std::string hashedPassword = sha256(user.password);
+
+	return hashedPassword == tmpSqlPassword;
 }
 
 
@@ -252,6 +286,9 @@ bool DataManager::shareFile(const std::string &destUsername, const User &srcUser
 	string destUserPath = DATA_PATH + destUsername + "\\.shared\\" + srcUser.username + "_" + fileName;
 	string srcUserPath = DATA_PATH + srcUser.username + "\\" + fileName;
 
+	// If there is not file on its name, the user does not exist
+	if (!std::filesystem::exists(DATA_PATH + destUsername))
+		throw UserInputError("No such user");
 	if (!std::filesystem::exists(srcUserPath))
 		throw FileHandlingError("No such file", MY_LOCATION);
 
@@ -277,7 +314,7 @@ bool DataManager::shareFile(const std::string &destUsername, const User &srcUser
 	if (exitResult != SQLITE_OK)
 	{
 		string msgErr;
-		msgErr = format("sharing.db cannot preform the query:\n{}", query);
+		msgErr = std::format("sharing.db cannot preform the query:\n{}", query);
 		throw SqlError(msgErr.c_str(), MY_LOCATION);
 	}
 	// Copying the files from the src user folder
@@ -299,13 +336,13 @@ int DataManager::callback(void *data, int argc, char **argv, char **azColName)
 	//fprintf(stderr, "%s: ", (const char *)data);
 	DataManager *me = reinterpret_cast<DataManager *>(data);
 	for (i = 0; i < argc; i++) {
-		printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-		printf("Col name: %s\n", azColName[i]);
-		printf("got into callback()\n");
+		//printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+		//printf("Col name: %s\n", azColName[i]);
+		//printf("got into callback()\n");
 		me->tmpSqlPassword = (std::string)(argv[i] ? argv[i] : "NULL");
 	}
 
-	printf("\n");
+	//printf("\n");
 	return 0;
 }
 
@@ -404,10 +441,14 @@ void DataManager::updateUsersTable(const User &user)
 		sqlite3_close(db);
 		throw SqlError("user_list.db cannot open.", MY_LOCATION);
 	}
+	// Hashing password using std::hash:
+
+	//std::hash<std::string> hashing; 
+	std::string hashedPassword = sha256(user.password);
 
 	// Inserting the new user into the users table.
 	query = "INSERT INTO list"
-		" VALUES('" + user.username + "', '" + user.password +
+		" VALUES('" + user.username + "', '" + hashedPassword +
 		"');";
 
 	exitResult = sqlite3_exec(db, query.c_str(), NULL, 0, &errMsg);

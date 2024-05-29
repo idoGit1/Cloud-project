@@ -1,10 +1,16 @@
 #pragma once
 #ifndef DATA_MANAGER_H_
 #define DATA_MANAGER_H_
-#include "my_project_header.h"
-#include "user.h"
+#include "d:/Cloud project/Additional/my_project_header.h"
+#include "d:/Cloud project/Additional/user.h"
 #include <winsqlite/winsqlite3.h>
 #include <filesystem>
+#include <sstream>
+#include <mutex>
+#include <vector>
+#include <functional>
+#include <openssl/sha.h>
+
 class DataManager
 {
 	static std::mutex signupMtx;
@@ -12,6 +18,8 @@ class DataManager
 	std::string tmpSqlPassword;
 	std::vector<std::pair<std::string, std::string>> tmpList;
 
+
+	std::string sha256(const std::string &);
 public:
 	DataManager();
 
