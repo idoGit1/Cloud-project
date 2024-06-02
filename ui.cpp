@@ -4,63 +4,45 @@
 
 UI::UI()
 {
+	// Constructor, initializing attempts counters and authentication.
 	loginAttemptsCounter = 0;
 	signupsCounter = 0;
 	authentication = BLANKAUTH;
-	//currentUser = User();
-	//client = Client();
+
 }
 
-UI::~UI()
-{
-	printf("\n\n UI destructor");
-}
 
 
 
 void UI::run()
 {
+	// The main function of the client side- getting user input, analyzing it and
+	// Calling the right function to proceed.
 	using namespace std;
-	std::string ip;
-	/*printf("Type the number of the type:\n1. Local host\n2. External device\n");
-	int ans;
-	cin >> ans;
-	if (ans == 1)
-		ip = IP;
-	else if (ans == 2)
-		ip = EXTERN_IP;
-	else
-		printf("Unknown. Program is terminated.");*/
-	try
-	{
-		client.build(EXTERN_IP);;
-	}
-	catch (...)
-	{
-		exit(1); // TO DO: HANDLE EXCEPTIONS
-	}
 
 	string op;
 
-	//client = Client();
 
-	printf("(cloud) Enter commands in lower letters. For help, type h\n Notice, you can upload "
-		"files with size no greater then 900,000,000 bytes (~900 Megabytes)!\n For fast"
-		" performance avoid files larger then 10 Megabytes");
+	printf("(cloud) Enter commands in lower letters. For help, type h.\n Notice, you can upload "
+		"files with size no greater then 80,000,000 bytes! (~80 Megabytes)");
 
 	while (true)
 	{
-		if (currentUser.username != "")
+		// If there is a user logged in (looking like (username)>>):
+		if (authentication != BLANKAUTH)
 			printf("\n(%s)>>", currentUser.username.c_str());
+		// If there is not user logged in:
 		else
 			printf("\n>>");
+		// Inputting the whole command (including spaces)
 		getline(cin, op);
-		//printf("\n");
+		// Checking that there is not an accedential null from before
 		if (op == "")
 			getline(cin, op);
+		// Removing unnecessery spaces
 		Local::removeStartEndSpaces(op);
 		size_t spaceIdx = op.find(" ");
-
+		
 		try
 		{
 			if (op == "h" && spaceIdx == string::npos)
@@ -69,6 +51,7 @@ void UI::run()
 			}
 			else if (op == "login" && spaceIdx == string::npos)
 			{
+				// Against dos
 				if (loginAttemptsCounter == 5)
 				{
 					printf("(cloud) Too many failed logins, program is terminated...");
@@ -83,6 +66,8 @@ void UI::run()
 			}
 			else if (op == "signup" && spaceIdx == string::npos)
 			{
+				// Against dos- counting the time it takes to do 5 signups
+				// if it is less than 10 seconds it is probably a bot.
 				static std::chrono::steady_clock::time_point startTime;
 				static std::chrono::steady_clock::time_point endTime;
 				if (signupsCounter == 0)
@@ -119,6 +104,7 @@ void UI::run()
 			else if (op == "exit" && spaceIdx == string::npos)
 			{
 				exit_();
+				return;
 			}
 			else if (op == "status" && spaceIdx == string::npos)
 			{
@@ -165,8 +151,9 @@ void UI::run()
 				}
 				remove(op);
 			}
-			else if (currentUser == ADMIN && op.substr(0, spaceIdx) == "removeuser")
+			else if (currentUser.username == "admin" && op.substr(0, spaceIdx) == "removeuser")
 			{
+				// Admin only command
 				printf("(cloud) Are you sure? (y/n)");
 				char ans;
 				cin >> ans;
@@ -181,13 +168,14 @@ void UI::run()
 				printf("Unknown command. For help type h.\n");
 			}
 		}
+		// Handling errors:
 		catch (UserInputError &ex)
 		{
 			printf("(cloud) %s", ex.whatForUser());
 		}
 		catch (CommunicationError &ex)
 		{
-			cerr << ex.whatForUser();
+			cerr << "Fatal error- " << ex.whatForUser() << "\nTerminating program...";
 			return;
 		}
 		catch (ContentError &ex)
@@ -198,6 +186,11 @@ void UI::run()
 		{
 			printf("(cloud) %s", ex.whatForUser());
 		}
+		// Catching errors unlisted
+		catch (std::exception &ex)
+		{
+			printf("(cloud) General error- %s", ex.what());
+		}
 
 	}
 }
@@ -205,14 +198,16 @@ void UI::run()
 
 void UI::help()
 {
+	// Prints a help message
 	printf("(cloud) h - help\nlogin\nsignup\nquit"
 		"(to quit Account)\nstatus\ndownload filename.type\nupload"
 		" filename.type\nshare @username@ filename.type\nremove filename.type"
-		"\n");
+		"\nexit\n");
 }
 
 void UI::login()
 {
+	// Logging in a new user
 
 	User user;
 	printf("(cloud) Username: ");
@@ -220,34 +215,36 @@ void UI::login()
 	printf("\n(cloud) Password: ");
 	std::cin >> user.password;
 
-	if (user.username.find("'") != std::string::npos || user.password.find("'") != std::string::npos)
+	// Checking if there is * or ' that might fail the program or be a sql injection.
+	if (user.username.find("'") != std::string::npos ||
+		user.password.find("'") != std::string::npos ||
+		user.username.find("*") != std::string::npos ||
+		user.password.find("*") != std::string::npos)
 	{
-		printf("(cloud) Char \"'\" is not allowed.");
+		printf("(cloud) Chars \"'\" and \"*\" are not allowed.");
 		return;
 	}
-
-	MainMsg msg;
-
-	strncpy_s(msg.header.auth, 9, BLANKAUTH, 8);
-	msg.header.type = Login;
-	msg.data = user.toString();
-	msg.header.size = msg.data.size();
+	// Sending a message to server
+	MainMsg msg(Login, authentication.c_str(), true, user.toString());
 	client.snd(msg);
+	// Cleaning message
+	msg.clean();
 
-	msg = MainMsg();
-
+	// Receiving messgae
 	client.receive(msg);
 
 
 	if (msg.header.success 
 		&& strncmp(msg.header.auth, msg.data.c_str(), 8) == 0)
 	{
+		// Success
 		authentication = msg.header.auth;
 		printf("(cloud) Welcome %s! Logged in successfully!", user.username.c_str());
 		currentUser = User(user);
 	}
 	else
 	{
+		// Failure
 		loginAttemptsCounter++;
 		throw UserInputError(msg.data.c_str());
 	}
@@ -256,27 +253,32 @@ void UI::login()
 
 void UI::signup()
 {
+	// Signing up new user
 	User user;
 	printf("(cloud) Enter username: ");
 	std::cin >> user.username;
 	printf("\n(cloud) Enter password: ");
 	std::cin >> user.password;
 	printf("\n");
-
-	MainMsg msg;
-
-	strncpy_s(msg.header.auth, 9, BLANKAUTH, 8);
-	msg.header.auth[8] = '\0';
-	msg.header.type = Signup;
-	msg.data = user.toString();
-	msg.header.size = (msg.data).size();
+	
+	// Checking if there is * or ' that might fail the program or be a sql injection.
+	if (user.username.find("'") != std::string::npos ||
+		user.password.find("'") != std::string::npos ||
+		user.username.find("*") != std::string::npos ||
+		user.password.find("*") != std::string::npos)
+	{
+		printf("(cloud) Chars \"'\" and \"*\" are not allowed.");
+		return;
+	}
+	// Sending messgae
+	MainMsg msg(Signup, authentication.c_str(), true, user.toString());
 
 	client.snd(msg);
 
 	msg.clean();
 	client.receive(msg);
 
-	if (msg.header.type == Signup && msg.header.success)
+	if (msg.header.success)
 		printf("(cloud) %s signed up successfully!", user.username.c_str());
 	else
 		throw UserInputError("Username is not unique.");
@@ -285,14 +287,15 @@ void UI::signup()
 
 void UI::removeUser(std::string &op)
 {
-
+	// Getting the whole command, and removing the user with the given username.
+	// Only for admins.
 
 	using std::string;
 	size_t spaceIdx = op.find(' ');
-
+	// Extracting the username.
 	string username = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
 
-	MainMsg msg(RemoveUser, authentication.c_str(), 1, username);
+	MainMsg msg(RemoveUser, authentication.c_str(), true, username);
 
 	client.snd(msg);
 
@@ -314,70 +317,63 @@ void UI::removeUser(std::string &op)
 
 void UI::quit()
 {
-	if (currentUser.username == "" && currentUser.password == "")
+	// Quiting- logging out of the user.
+	if (authentication == BLANKAUTH)
 	{
 		printf("(cloud) No active user.");
 		return;
 	}
 
-	MainMsg msg;
-
-	msg.header.type = Quit;
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-	msg.data = "";
-	msg.header.size = msg.data.size();
+	MainMsg msg(Quit, authentication.c_str(), true, "");
 
 	client.snd(msg);
 
 	msg.clean();
 
 	client.receive(msg);
-	if (msg.header.type == Quit && msg.header.success)
+	if (msg.header.success)
 	{
-		authentication = BLANKAUTH;
+		// Success
 		printf("(cloud) %s Quitted successfully!", currentUser.username.c_str());
+		authentication = BLANKAUTH;
 		currentUser = User();
 	}
+	// Failure
 	else
 		throw CommunicationError(msg.data.c_str(), MY_LOCATION);
 }
 
 void UI::exit_()
 {
+	// Exiting the system- shutting down.
 	MainMsg msg;
 
 	msg = MainMsg(Exit, authentication.c_str(), true, "");
 	client.snd(msg);
 
-	// Let the message to pass safely.
+	// Let the message to pass safely through the socket.
 	std::this_thread::sleep_for(std::chrono::seconds(1));
-	exit(0);
+	// I can just exit because everything has a destructor and they will each clean up its own 
+	// responsibility.
+	return;
 }
 
 void UI::status()
 {
-
-	MainMsg msg;
-
-	msg.header.type = Status;
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-	msg.data = "";
-	msg.header.size = msg.data.size();
+	// Getting status about files, sahred file, and files the user is sharing.
+	
+	MainMsg msg(Status, authentication.c_str(), true, "");
 
 	client.snd(msg);
-
+	
 	msg.clean();
 	client.receive(msg);
+
+
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code.", MY_LOCATION);
 	else if (!msg.header.success)
 		throw CommunicationError(msg.data.c_str(), MY_LOCATION);
-	else if (msg.data == "")
-	{
-		printf("(cloud) No files uploaded so far.");
-	}
 	else
 	{
 		printf("(cloud) Status:\n%s", msg.data.c_str());
@@ -386,43 +382,51 @@ void UI::status()
 
 void UI::download(std::string &op)
 {
+	// Downloading the file specified in op.
 	using namespace std;
 
 	size_t spaceIdx = op.find(" ");
 	string inputFileName = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
-	MainMsg msg;
 
 	Local::removeStartEndSpaces(inputFileName);
 	if (spaceIdx == string::npos || inputFileName == "")
 	{
+		// Did not give file.
 		printf("Please specify the name of the file you would"
 			"like to download, For example: download myfile.txt is a valid command.");
 		return;
 	}
-	msg.header.type = Download;
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-	msg.data = (string)inputFileName;
-	msg.header.size = msg.data.size();
+	// Check if there is use with the char *.
+	if (op.find("*") != std::string::npos)
+	{
+		// Protecting from system failure
+		printf("(cloud) char \"*\" is not allowed");
+		return;
+	}
+	printf("(cloud) Downloading...\n");
+
+	MainMsg msg(Download, authentication.c_str(), true, inputFileName);
 
 	client.snd(msg);
+
 	msg.clean();
 	client.receive(msg);
+
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code.", MY_LOCATION);
 	if (msg.header.success)
 	{
+		// Getting the file name and the file content that are seprated by a star.
 		size_t starPos = msg.data.find("*");
 		string outFileName = msg.data.substr(0, starPos);
 		string fileContent = msg.data.substr(starPos + 1, msg.data.size() - starPos);
-		// Need to check if file is already exist.
-		ofstream outFile(outFileName, ios::binary);
-		//cerr << outFileName;
-		// Need to check if worked.
+
+		// Writing the file binary
+		ofstream outFile("Downloaded/" + outFileName, ios::binary);
+
 		if (outFile)
 		{
 			outFile.write(fileContent.data(), fileContent.size());
-			//outFile << fileContent;
 			outFile.close();
 			printf("(cloud) %s downloaded successfully!", outFileName.c_str());
 		}
@@ -436,65 +440,71 @@ void UI::download(std::string &op)
 
 void UI::upload(std::string &op)
 {
+	// Uploading file specified in op.
 	using namespace std;
 
 	size_t spaceIdx = op.find(" ");
 
-
+	// Getting the full path of the file without spaces
 	string inputFilePath = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
 	Local::removeStartEndSpaces(inputFilePath);
 
 	if (spaceIdx == string::npos || inputFilePath == "")
 	{
+		// No file given
 		printf("Please specify the path of the file you would"
 			"like to upload, For example: upload C:/desktop/myfile.txt is a valid command.");
 		return;
 	}
 
-
-
-	string inputFileName; // Without path (\\)
-	size_t namePos = inputFilePath.find_last_of("\\");
-	size_t namePos2 = inputFilePath.find_last_of("/");
-	if (namePos != string::npos)
-		inputFileName = inputFilePath.substr(namePos + 1, inputFilePath.size() - namePos - 1);
-	else if (namePos2 != string::npos)
-		inputFileName = inputFilePath.substr(namePos2 + 1, inputFilePath.size() - namePos - 1);
-	else
-		inputFileName = inputFilePath;
-	//cerr << "File name: " << inputFilePath;
-	if (inputFileName.find('*') != string::npos)
+	// Check if there is use with the char *.
+	if (op.find("*") != std::string::npos)
 	{
-		printf("(cloud) Invalid name. You must not use '*'.");
+		printf("(cloud) char \"*\" is not allowed");
 		return;
 	}
+
+	string inputFileName; // Without path (\\)
+	// There are two options: using \ and using /. namePos is for \ and namePos2 is for /
+
+	size_t namePos = inputFilePath.find_last_of("\\");
+	size_t namePos2 = inputFilePath.find_last_of("/");
+
+	if (namePos != string::npos) // Using \.
+		inputFileName = inputFilePath.substr(namePos + 1, inputFilePath.size() - namePos - 1);
 	
+	else if (namePos2 != string::npos)// Using /
+		inputFileName = inputFilePath.substr(namePos2 + 1, inputFilePath.size() - namePos - 1);
 	
+	else // In the same directory...
+		inputFileName = inputFilePath;
+	
+	// Inputting the file into a binary string.
 	ifstream inputFile;
 	inputFile.open(inputFilePath, ios::binary);
+
 	if (!inputFile.is_open())
 		throw UserInputError("No such file.");
 
+	// Getting the whole file into fileContent (iterating through the file byte by byte.
+	// {} means until the end.
 	string fileContent(istreambuf_iterator<char>(inputFile), {});
 
 	inputFile.close();
+	// If file is too big to handle
 	if (fileContent.size() > MAX_FILE_SIZE)
 		throw UserInputError("File is too large. Notice that the size of the file"
-			"do not go over 90,000,000 bytes.");
+			"do not go over 80,000,000 bytes.");
 	
-	MainMsg msg;
+	printf("(cloud) Uploading...\n");
 
-	msg.header.type = Upload;
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
+	MainMsg msg(Upload, authentication.c_str(), true, inputFileName + "*" + fileContent);
 
-	msg.data = inputFileName + "*";
-	msg.data += fileContent;
-	msg.header.size = msg.data.size();
 	client.snd(msg);
 
-	msg = MainMsg();
+	msg.clean();
 	client.receive(msg);
+
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code.", MY_LOCATION);
 	if (msg.header.success)
@@ -506,6 +516,8 @@ void UI::upload(std::string &op)
 
 void UI::share(std::string &op)
 {
+	// Sharing specified file with specified user.
+	// 
 	// Removing unwanted spaces from both edges of the string.
 	Local::removeStartEndSpaces(op);
 
@@ -515,7 +527,7 @@ void UI::share(std::string &op)
 	std::string sharedUsername;
 	std::string fileName;
 
-
+	// Protecting the system from invaild input.
 	if (firstAtIdx == std::string::npos || firstAtIdx == secondAtIdx ||
 		lastSpaceIdx == std::string::npos
 		|| lastSpaceIdx < secondAtIdx)
@@ -524,23 +536,15 @@ void UI::share(std::string &op)
 			"share @<username>@ <file name>");
 		return;
 	}
-
+	// Extracting file name and shared username
 	fileName = op.substr(lastSpaceIdx + 1, op.size() - lastSpaceIdx - 1);
 	sharedUsername = op.substr(firstAtIdx + 1, secondAtIdx - firstAtIdx - 1);
 
-	MainMsg msg;
-
-	msg.header.type = Share;
-	
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-
-	msg.data = sharedUsername + "*" + fileName;
-	msg.header.size = msg.data.size();
+	MainMsg msg(Share, authentication.c_str(), true, sharedUsername + "*" + fileName);
 
 	client.snd(msg);
 
-	msg = MainMsg();
+	msg.clean();
 	client.receive(msg);
 
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
@@ -553,31 +557,26 @@ void UI::share(std::string &op)
 
 void UI::remove(std::string &op)
 {
+	// Removing given file.
+
 	Local::removeStartEndSpaces(op);
 	size_t spaceIdx = op.find(" ");
-
+	// Checking if file is really given.
 	if (spaceIdx == std::string::npos)
 	{
 		printf("(cloud) File name is required");
 		return;
 	}
+	// Extractin file's name
 	std::string inputFileName = op.substr(spaceIdx + 1, op.size() - spaceIdx - 1);
 
-	MainMsg msg;
-
-	msg.header.type = Remove;
-	memset(msg.header.auth, 0, 9);
-	strncpy_s(msg.header.auth, 9, authentication.c_str(), 8);
-	msg.header.auth[8] = '\0';
-
-	msg.data = inputFileName;
-	msg.header.size = msg.data.size();
+	MainMsg msg(Remove, authentication.c_str(), true, inputFileName);
 
 	client.snd(msg);
 
-	
-	msg = MainMsg();
+	msg .clean();
 	client.receive(msg);
+
 	if (strncmp(msg.header.auth, authentication.c_str(), 8) != 0)
 		throw CommunicationError("Wrong authentication code", MY_LOCATION);
 	if (msg.header.success)

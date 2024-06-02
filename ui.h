@@ -7,18 +7,21 @@
 #include "d:/Cloud project/Additional/message.h"
 #include "d:/Cloud project/Additional/user.h"
 
+#include <iostream>
 #include <vector>
 #include <string>
 #include <chrono>
+#include <fstream>
 
 class UI
 {
 	User currentUser;
 	std::string authentication;
 	Client client;
-	int loginAttemptsCounter; // Against dos attac
-	int signupsCounter;
-	//bool readFile(vector<string> &, string);
+	int loginAttemptsCounter; // Against dos attack
+	int signupsCounter; // Against dos attack
+
+	// Command functions
 	void help();
 	void login();
 	void signup();
@@ -32,11 +35,8 @@ class UI
 	void removeUser(std::string &);
 public:
 	UI();
-	~UI();
-
-
 	void run();
 
 };
 
-#endif // UI_H_
+#endif 
